@@ -1,5 +1,7 @@
 import "./globals.css";
 import type { ReactNode } from "react";
+import { AuthProvider } from "@/components/auth/AuthProvider";
+import Header from "@/components/ui/Header";
 
 export const metadata = { title: "Thesis Management System" };
 
@@ -7,8 +9,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <header className="top">AI-Assisted University Thesis Management System</header>
-        <main>{children}</main>
+        <AuthProvider>
+          <Header />
+          <main>{children}</main>
+        </AuthProvider>
       </body>
     </html>
   );

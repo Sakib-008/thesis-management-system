@@ -12,3 +12,18 @@ a { color:var(--accent); }
 .stub-note { color:var(--muted); }
 ul.routes { columns:2; padding-left:18px; }
 .ok { color:#1a8f4c; } .bad { color:#c0392b; }
+
+/* ---- Phase 2: header, forms, buttons, tables ---- */
+.header-row { display:flex; justify-content:space-between; align-items:center; gap:16px; }
+.brand { color:var(--fg); text-decoration:none; }
+.muted { color:var(--muted); font-size:14px; }
+.form { display:flex; flex-direction:column; gap:12px; max-width:420px; }
+.form label { display:flex; flex-direction:column; gap:4px; font-size:14px; }
+input, select { padding:9px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--fg); font:inherit; }
+.btn { padding:9px 14px; border:1px solid var(--accent); border-radius:6px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+.btn:disabled { opacity:.5; cursor:not-allowed; }
+.btn-small { padding:4px 10px; font-size:13px; background:transparent; color:var(--accent); }
+.error { color:#c0392b; font-size:14px; margin:0; }
+table { width:100%; border-collapse:collapse; font-size:14px; }
+th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+.row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
