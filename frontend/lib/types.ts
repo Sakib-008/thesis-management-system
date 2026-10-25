@@ -23,3 +23,13 @@ export interface Supervisor {
   expertise: string;
   fields: NamedRef[];
 }
+
+export interface AuditLogEntry {
+  id: number;
+  action: string;
+  entity: string;
+  entity_id: number | null;
+  meta: Record<string, unknown> | null;
+  timestamp: string;
+  user: UserBrief | null;
+}
