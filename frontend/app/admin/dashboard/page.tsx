@@ -18,8 +18,11 @@ import { StatCard } from "@/components/ui/StatCard";
 import { apiGet, errorMessage } from "@/lib/apiClient";
 import { Role, User } from "@/lib/auth";
 import { describeAction, timeAgo } from "@/lib/format";
-import { THESIS_STATUS_DEMO } from "@/lib/mock/adminDemo";
+import { THESIS_STATUS_DEMO } from "@/lib/mock/adminDemo"
+import { AXIS_TICK, CURSOR, GRID, TOOLTIP } from "@/lib/chartTheme";;
 import { AuditLogEntry, NamedRef, Program, Student, Supervisor } from "@/lib/types";
+
+
 
 // Chart colours are plain hex because SVG attributes can't read the CSS theme variables.
 const ROLE_META: Record<Role, { label: string; color: string }> = {
@@ -27,20 +30,6 @@ const ROLE_META: Record<Role, { label: string; color: string }> = {
   supervisor: { label: "Supervisors", color: "#6366f1" },
   coordinator: { label: "Coordinators", color: "#f59e0b" },
   admin: { label: "Admins", color: "#ef4444" },
-};
-const AXIS_TICK = { fontSize: 12, fill: "#94a3b8" };
-const GRID = "rgba(148,163,184,0.25)";
-const CURSOR = { fill: "rgba(148,163,184,0.12)" };
-const TOOLTIP = {
-  contentStyle: {
-    background: "rgb(var(--surface))",
-    border: "1px solid rgb(var(--line))",
-    borderRadius: 8,
-    fontSize: 12,
-    color: "rgb(var(--ink))",
-  },
-  labelStyle: { color: "rgb(var(--ink))" },
-  itemStyle: { color: "rgb(var(--ink))" },
 };
 
 interface Data {
