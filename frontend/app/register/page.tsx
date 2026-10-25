@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import AuthLayout from "@/components/layout/AuthLayout";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Field, Input, Select } from "@/components/ui/Form";
 import { apiPost, errorMessage } from "@/lib/apiClient";
 import { dashboardPath } from "@/lib/auth";
 
@@ -33,29 +37,30 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="card">
-      <h1>Register</h1>
-      <p className="muted">Coordinator and admin accounts are created by an administrator.</p>
-      <form className="form" onSubmit={onSubmit}>
-        <label>Full name
-          <input value={form.full_name} onChange={set("full_name")} required minLength={2} />
-        </label>
-        <label>Email
-          <input type="email" value={form.email} onChange={set("email")} required />
-        </label>
-        <label>Password (8–64 characters)
-          <input type="password" value={form.password} onChange={set("password")} required minLength={8} maxLength={64} />
-        </label>
-        <label>I am a
-          <select value={form.role} onChange={set("role")}>
+    <AuthLayout title="Create your account" subtitle="Coordinator and admin accounts are created by an administrator.">
+      <form className="space-y-4" onSubmit={onSubmit}>
+        {error && <Alert>{error}</Alert>}
+        <Field label="Full name">
+          <Input value={form.full_name} onChange={set("full_name")} required minLength={2} autoFocus />
+        </Field>
+        <Field label="Email">
+          <Input type="email" value={form.email} onChange={set("email")} placeholder="you@university.edu" required />
+        </Field>
+        <Field label="Password" hint="8 to 64 characters">
+          <Input type="password" value={form.password} onChange={set("password")} required minLength={8} maxLength={64} />
+        </Field>
+        <Field label="I am a">
+          <Select value={form.role} onChange={set("role")}>
             <option value="student">Student</option>
             <option value="supervisor">Supervisor</option>
-          </select>
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button className="btn" disabled={submitting}>{submitting ? "Creating account…" : "Create account"}</button>
+          </Select>
+        </Field>
+        <Button type="submit" loading={submitting} className="w-full">Create account</Button>
       </form>
-      <p className="muted">Already registered? <Link href="/login">Log in</Link></p>
-    </div>
+      <p className="mt-6 text-center text-sm text-subtle">
+        Already registered?{" "}
+        <Link href="/login" className="font-medium text-brand hover:underline">Log in</Link>
+      </p>
+    </AuthLayout>
   );
 }

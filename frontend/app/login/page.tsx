@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import AuthLayout from "@/components/layout/AuthLayout";
+import { Alert } from "@/components/ui/Alert";
+import { Button } from "@/components/ui/Button";
+import { Field, Input } from "@/components/ui/Form";
 import { errorMessage } from "@/lib/apiClient";
 import { dashboardPath } from "@/lib/auth";
 
@@ -35,19 +39,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="card">
-      <h1>Log in</h1>
-      <form className="form" onSubmit={onSubmit}>
-        <label>Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        </label>
-        <label>Password
-          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-        </label>
-        {error && <p className="error">{error}</p>}
-        <button className="btn" disabled={submitting}>{submitting ? "Logging in…" : "Log in"}</button>
+    <AuthLayout title="Welcome back" subtitle="Log in to manage your thesis.">
+      <form className="space-y-4" onSubmit={onSubmit}>
+        {error && <Alert>{error}</Alert>}
+        <Field label="Email">
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@university.edu" required autoFocus />
+        </Field>
+        <Field label="Password">
+          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+        </Field>
+        <Button type="submit" loading={submitting} className="w-full">Log in</Button>
       </form>
-      <p className="muted">No account? <Link href="/register">Register as a student or supervisor</Link></p>
-    </div>
+      <p className="mt-6 text-center text-sm text-subtle">
+        New here?{" "}
+        <Link href="/register" className="font-medium text-brand hover:underline">Create an account</Link>
+      </p>
+    </AuthLayout>
   );
 }
