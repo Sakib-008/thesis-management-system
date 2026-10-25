@@ -35,3 +35,24 @@ export function describeAction(action: string, meta: Record<string, unknown> | n
   if (meta && typeof meta.role === "string") return `${base} (${meta.role})`;
   return base;
 }
+
+
+// ---- labels for deadlines and dates given as "days from now" (used by dashboards) ----
+export function dueLabel(days: number): string {
+  if (days < 0) return `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue`;
+  if (days === 0) return "Due today";
+  if (days === 1) return "Due tomorrow";
+  return `Due in ${days} days`;
+}
+
+export function inDaysLabel(days: number): string {
+  if (days === 0) return "Today";
+  if (days === 1) return "Tomorrow";
+  return `In ${days} days`;
+}
+
+export function daysAgoLabel(days: number): string {
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return `${days} days ago`;
+}
