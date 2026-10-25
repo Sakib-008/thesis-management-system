@@ -1,5 +1,11 @@
-import StubPage from "@/components/ui/StubPage";
+import NameListManager from "@/components/ui/NameListManager";
 
 export default function Page() {
-  return <StubPage title="Research Fields" role="Coordinator" phase={3} />;
+  return (
+    <NameListManager
+      title="Research fields"
+      endpoint="/api/v1/research-fields"
+      deleteWarning="It will also be removed from every supervisor and proposal that uses it."
+    />
+  );
 }

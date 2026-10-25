@@ -1,5 +1,11 @@
-import StubPage from "@/components/ui/StubPage";
+import NameListManager from "@/components/ui/NameListManager";
 
 export default function Page() {
-  return <StubPage title="Departments" role="Admin" phase={3} />;
+  return (
+    <NameListManager
+      title="Departments"
+      endpoint="/api/v1/departments"
+      deleteWarning="This only works if no program, student or supervisor uses it."
+    />
+  );
 }

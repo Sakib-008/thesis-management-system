@@ -35,9 +35,12 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
     }
     throw new ApiError(res.status, message);
   }
+  if (res.status === 204) return undefined as T; // e.g. DELETE: success with no body
   return res.json() as Promise<T>;
 }
 
 export const apiGet = <T>(path: string) => request<T>(path);
-export const apiPost = <T>(path: string, body: unknown) => request<T>(path, { method: "POST", body });
+export const apiPost = <T>(path: string, body?: unknown) => request<T>(path, { method: "POST", body });
+export const apiPut = <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body });
 export const apiPatch = <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body });
+export const apiDelete = (path: string) => request<void>(path, { method: "DELETE" });

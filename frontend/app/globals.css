@@ -27,3 +27,17 @@ input, select { padding:9px 10px; border:1px solid var(--border); border-radius:
 table { width:100%; border-collapse:collapse; font-size:14px; }
 th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
 .row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+
+/* ---- Phase 3: role menu, badges, helpers ---- */
+.rolenav { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; padding-bottom:10px; border-bottom:1px solid var(--border); font-size:14px; }
+.rolenav a { text-decoration:none; }
+.rolenav a.active { font-weight:600; text-decoration:underline; }
+.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; border:1px solid var(--border); }
+.badge-ok { color:#1a8f4c; border-color:#1a8f4c; }
+.badge-warn { color:#b9770e; border-color:#b9770e; }
+.actions { white-space:nowrap; }
+.notice { color:#1a8f4c; font-size:14px; margin:0; }
+.checks { display:flex; flex-wrap:wrap; gap:6px 18px; }
+.checks label { flex-direction:row; align-items:center; gap:6px; }
+textarea { padding:9px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--fg); font:inherit; min-height:90px; }
+input[type=number] { width:90px; }

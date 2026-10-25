@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactNode, useEffect } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
+import RoleNav from "@/components/ui/RoleNav";
 import { dashboardPath, Role } from "@/lib/auth";
 
 // UX-only guard. The real security is the backend's require_roles(...) on every endpoint.
@@ -26,5 +27,10 @@ export default function RoleGuard({ roles, children }: { roles: Role[]; children
       </div>
     );
   }
-  return <>{children}</>;
+  return (
+    <>
+      <RoleNav role={user.role} />
+      {children}
+    </>
+  );
 }
