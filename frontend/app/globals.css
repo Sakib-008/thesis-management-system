@@ -1,43 +1,42 @@
-:root { --bg:#f6f7f9; --fg:#1b1f24; --muted:#5b6672; --card:#fff; --border:#dfe3e8; --accent:#2f5bea; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg:#14171b; --fg:#e8ebef; --muted:#9aa5b1; --card:#1c2026; --border:#2c333b; --accent:#7c9bff; }
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens: space-separated RGB channels so Tailwind can add opacity (bg-brand/10). */
+:root {
+  --canvas: 246 247 251;
+  --surface: 255 255 255;
+  --ink: 15 23 42;
+  --subtle: 100 116 139;
+  --line: 226 232 240;
+  --brand: 79 70 229;
+  --on-brand: 255 255 255;
+  --success: 22 163 74;
+  --warning: 202 138 4;
+  --danger: 220 38 38;
+  --info: 2 132 199;
 }
-* { box-sizing: border-box; }
-body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--fg); }
-header.top { padding:14px 24px; border-bottom:1px solid var(--border); background:var(--card); font-weight:600; }
-main { max-width:960px; margin:0 auto; padding:32px 24px; }
-a { color:var(--accent); }
-.card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:20px; margin-bottom:20px; }
-.stub-role { text-transform:uppercase; letter-spacing:.08em; font-size:12px; color:var(--muted); margin:0; }
-.stub-note { color:var(--muted); }
-ul.routes { columns:2; padding-left:18px; }
-.ok { color:#1a8f4c; } .bad { color:#c0392b; }
 
-/* ---- Phase 2: header, forms, buttons, tables ---- */
-.header-row { display:flex; justify-content:space-between; align-items:center; gap:16px; }
-.brand { color:var(--fg); text-decoration:none; }
-.muted { color:var(--muted); font-size:14px; }
-.form { display:flex; flex-direction:column; gap:12px; max-width:420px; }
-.form label { display:flex; flex-direction:column; gap:4px; font-size:14px; }
-input, select { padding:9px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--fg); font:inherit; }
-.btn { padding:9px 14px; border:1px solid var(--accent); border-radius:6px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
-.btn:disabled { opacity:.5; cursor:not-allowed; }
-.btn-small { padding:4px 10px; font-size:13px; background:transparent; color:var(--accent); }
-.error { color:#c0392b; font-size:14px; margin:0; }
-table { width:100%; border-collapse:collapse; font-size:14px; }
-th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
-.row { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; }
+.dark {
+  --canvas: 10 14 24;
+  --surface: 17 24 39;
+  --ink: 241 245 249;
+  --subtle: 148 163 184;
+  --line: 38 48 66;
+  --brand: 129 140 248;
+  --on-brand: 15 23 42;
+  --success: 74 222 128;
+  --warning: 250 204 21;
+  --danger: 248 113 113;
+  --info: 56 189 248;
+}
 
-/* ---- Phase 3: role menu, badges, helpers ---- */
-.rolenav { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; padding-bottom:10px; border-bottom:1px solid var(--border); font-size:14px; }
-.rolenav a { text-decoration:none; }
-.rolenav a.active { font-weight:600; text-decoration:underline; }
-.badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; border:1px solid var(--border); }
-.badge-ok { color:#1a8f4c; border-color:#1a8f4c; }
-.badge-warn { color:#b9770e; border-color:#b9770e; }
-.actions { white-space:nowrap; }
-.notice { color:#1a8f4c; font-size:14px; margin:0; }
-.checks { display:flex; flex-wrap:wrap; gap:6px 18px; }
-.checks label { flex-direction:row; align-items:center; gap:6px; }
-textarea { padding:9px 10px; border:1px solid var(--border); border-radius:6px; background:var(--card); color:var(--fg); font:inherit; min-height:90px; }
-input[type=number] { width:90px; }
+@layer base {
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { @apply border-line; }
+}
