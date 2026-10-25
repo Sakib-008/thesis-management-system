@@ -2,9 +2,10 @@ from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+from app.models.user import User
 
 
 class AuditLog(Base):
@@ -18,3 +19,5 @@ class AuditLog(Base):
     # "metadata" is reserved by SQLAlchemy's declarative base, so the attribute is named "meta"
     meta: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User | None] = relationship()

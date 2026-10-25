@@ -3,8 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ReactNode, useEffect } from "react";
+import { ShieldAlert } from "lucide-react";
 import { useAuth } from "@/components/auth/AuthProvider";
-import RoleNav from "@/components/ui/RoleNav";
+import AppShell from "@/components/layout/AppShell";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Spinner } from "@/components/ui/Spinner";
 import { dashboardPath, Role } from "@/lib/auth";
 
 // UX-only guard. The real security is the backend's require_roles(...) on every endpoint.
@@ -16,21 +21,24 @@ export default function RoleGuard({ roles, children }: { roles: Role[]; children
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
-  if (loading || !user) return <p>Loading…</p>;
-
-  if (!roles.includes(user.role)) {
-    return (
-      <div className="card">
-        <h2>Not authorized</h2>
-        <p>Your role ({user.role}) cannot open this page.</p>
-        <Link href={dashboardPath(user.role)}>Go to my dashboard</Link>
-      </div>
-    );
+  if (loading || !user) {
+    return <div className="flex min-h-screen items-center justify-center"><Spinner className="h-8 w-8" /></div>;
   }
+
   return (
-    <>
-      <RoleNav role={user.role} />
-      {children}
-    </>
+    <AppShell user={user}>
+      {roles.includes(user.role) ? (
+        children
+      ) : (
+        <Card>
+          <EmptyState
+            icon={ShieldAlert}
+            title="Not authorized"
+            description={`Your role (${user.role}) cannot open this page.`}
+            action={<Link href={dashboardPath(user.role)}><Button>Go to my dashboard</Button></Link>}
+          />
+        </Card>
+      )}
+    </AppShell>
   );
 }

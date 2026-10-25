@@ -1,26 +1,62 @@
+import {
+  Building2, ClipboardCheck, FlaskConical, GraduationCap, LayoutDashboard,
+  LucideIcon, Medal, UserCircle, Users,
+} from "lucide-react";
 import { Role } from "./auth";
 
-// Menu links per role. Each phase adds the pages it builds.
-export const NAV: Record<Role, { href: string; label: string }[]> = {
+export interface NavItem { href: string; label: string; icon: LucideIcon }
+export interface NavGroup { label?: string; items: NavItem[] }
+
+// Sidebar menu per role. Each phase adds the pages it builds.
+export const NAV: Record<Role, NavGroup[]> = {
   student: [
-    { href: "/student/dashboard", label: "Dashboard" },
-    { href: "/student/profile", label: "My profile" },
+    {
+      items: [
+        { href: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/student/profile", label: "My profile", icon: UserCircle },
+      ],
+    },
   ],
   supervisor: [
-    { href: "/supervisor/dashboard", label: "Dashboard" },
-    { href: "/supervisor/profile", label: "My profile" },
+    {
+      items: [
+        { href: "/supervisor/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        { href: "/supervisor/profile", label: "My profile", icon: UserCircle },
+      ],
+    },
   ],
   coordinator: [
-    { href: "/coordinator/dashboard", label: "Dashboard" },
-    { href: "/coordinator/students", label: "Students & CGPA" },
-    { href: "/coordinator/research-fields", label: "Research fields" },
+    { items: [{ href: "/coordinator/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
+    {
+      label: "Manage",
+      items: [
+        { href: "/coordinator/students", label: "Students & CGPA", icon: ClipboardCheck },
+        { href: "/coordinator/research-fields", label: "Research fields", icon: FlaskConical },
+      ],
+    },
   ],
   admin: [
-    { href: "/admin/dashboard", label: "Dashboard" },
-    { href: "/admin/users", label: "Users" },
-    { href: "/admin/departments", label: "Departments" },
-    { href: "/admin/programs", label: "Programs" },
-    { href: "/admin/research-fields", label: "Research fields" },
-    { href: "/admin/supervisor-designations", label: "Designations & supervisors" },
+    { items: [{ href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
+    {
+      label: "People",
+      items: [
+        { href: "/admin/users", label: "Users & roles", icon: Users },
+        { href: "/admin/supervisor-designations", label: "Designations", icon: Medal },
+      ],
+    },
+    {
+      label: "Academic setup",
+      items: [
+        { href: "/admin/departments", label: "Departments", icon: Building2 },
+        { href: "/admin/programs", label: "Programs", icon: GraduationCap },
+        { href: "/admin/research-fields", label: "Research fields", icon: FlaskConical },
+      ],
+    },
   ],
 };
+
+export function pageTitle(role: Role, pathname: string): string {
+  const items = NAV[role].flatMap((g) => g.items);
+  const match = items.find((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
+  return match?.label ?? "";
+}
