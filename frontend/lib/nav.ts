@@ -1,5 +1,5 @@
 import {
-  Award, Building2, CalendarClock, ClipboardCheck, FileText, FlaskConical, FolderOpen, GraduationCap,
+  Award, Building2, CalendarClock, ClipboardCheck, FileCheck, FileText, FlaskConical, FolderOpen, GraduationCap,
   LayoutDashboard, ListChecks, LucideIcon, Medal, MessageSquare, UserCircle, Users,
 } from "lucide-react";
 import { Role } from "./auth";
@@ -39,6 +39,16 @@ export const NAV: Record<Role, NavGroup[]> = {
       items: [
         { href: "/supervisor/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { href: "/supervisor/profile", label: "My profile", icon: UserCircle },
+      ],
+    },
+    {
+      label: "Supervision",
+      items: [
+        { href: "/supervisor/proposals", label: "Proposals", icon: FileText },
+        { href: "/supervisor/students", label: "My students", icon: Users },
+        { href: "/supervisor/milestones", label: "Milestones", icon: ListChecks },
+        { href: "/supervisor/meetings", label: "Meetings", icon: CalendarClock },
+        { href: "/supervisor/evaluations", label: "Evaluations", icon: FileCheck },
       ],
     },
   ],

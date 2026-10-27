@@ -85,7 +85,7 @@ export const MILESTONES: {
   { id: 1, title: "Literature review", description: "Survey recent work on traffic sign detection and classification and identify the research gap.", progress: 100, daysLeft: -21, status: "Completed", submissions: 2 },
   { id: 2, title: "Research methodology", description: "Describe the dataset, model architectures and the evaluation protocol.", progress: 80, daysLeft: 5, status: "In progress", submissions: 1 },
   { id: 3, title: "Implementation", description: "Implement the models, the training pipeline and the baseline comparison.", progress: 50, daysLeft: 28, status: "In progress", submissions: 0 },
-  { id: 4, title: "Results and analysis", description: "Run the experiments and analyse accuracy, robustness and inference time.", progress: 20, daysLeft: 49, status: "Not started", submissions: 0 },
+  { id: 4, title: "Results and analysis", description: "Run the experiments and analyse accuracy, robustness and inference time.", progress: 0, daysLeft: 49, status: "Not started", submissions: 0 },
   { id: 5, title: "Final report", description: "Write and submit the complete thesis document.", progress: 0, daysLeft: 77, status: "Not started", submissions: 0 },
 ];
 

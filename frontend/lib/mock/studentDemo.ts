@@ -5,7 +5,8 @@ export const STUDENT_THESIS = {
   title: PROPOSAL.title,
   status: "In progress",
   supervisor: "Dr. A. Rahman",
-  progress: 62,
+  // overall progress is the average of the milestones, the same number the milestones page shows
+  progress: Math.round(MILESTONES.reduce((sum, m) => sum + m.progress, 0) / MILESTONES.length),
 };
 
 export const STUDENT_MILESTONES = MILESTONES;
