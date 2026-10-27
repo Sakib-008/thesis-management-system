@@ -1,6 +1,6 @@
 import {
-  Building2, ClipboardCheck, FlaskConical, GraduationCap, LayoutDashboard,
-  LucideIcon, Medal, UserCircle, Users,
+  Award, Building2, CalendarClock, ClipboardCheck, FileText, FlaskConical, FolderOpen, GraduationCap,
+  LayoutDashboard, ListChecks, LucideIcon, Medal, MessageSquare, UserCircle, Users,
 } from "lucide-react";
 import { Role } from "./auth";
 
@@ -14,6 +14,23 @@ export const NAV: Record<Role, NavGroup[]> = {
       items: [
         { href: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { href: "/student/profile", label: "My profile", icon: UserCircle },
+      ],
+    },
+    {
+      label: "Thesis",
+      items: [
+        { href: "/student/thesis", label: "My thesis", icon: GraduationCap },
+        { href: "/student/proposal/1", label: "Proposal", icon: FileText },
+        { href: "/student/milestones", label: "Milestones", icon: ListChecks },
+        { href: "/student/documents", label: "Documents", icon: FolderOpen },
+      ],
+    },
+    {
+      label: "Supervision",
+      items: [
+        { href: "/student/meetings", label: "Meetings", icon: CalendarClock },
+        { href: "/student/feedback", label: "Feedback", icon: MessageSquare },
+        { href: "/student/evaluation", label: "Evaluation", icon: Award },
       ],
     },
   ],

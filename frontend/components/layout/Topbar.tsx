@@ -3,6 +3,7 @@
 import { LogOut, Menu } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "@/components/theme/ThemeToggle";
+import NotificationBell from "@/components/layout/NotificationBell";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +23,7 @@ export default function Topbar({ user, onMenu }: { user: User; onMenu: () => voi
       <div className="font-medium">{pageTitle(user.role, pathname)}</div>
 
       <div className="ml-auto flex items-center gap-2">
+        <NotificationBell role={user.role} />
         <ThemeToggle />
         <div className="hidden text-right leading-tight sm:block">
           <div className="text-sm font-medium">{user.full_name}</div>
