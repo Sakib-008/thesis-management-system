@@ -1,12 +1,11 @@
 import {
-  Award, Building2, CalendarClock, ClipboardCheck, FileCheck, FileText, FlaskConical, FolderOpen, GraduationCap,
-  LayoutDashboard, ListChecks, LucideIcon, Medal, MessageSquare, UserCircle, Users,
+  Award, BarChart3, Building2, CalendarClock, ClipboardCheck, FileBarChart, FileCheck, FileText, FlaskConical,
+  FolderOpen, GraduationCap, LayoutDashboard, ListChecks, LucideIcon, Medal, MessageSquare, ScrollText,
+  Settings, Shuffle, UserCheck, UserCircle, Users,
 } from "lucide-react";
 import { Role } from "./auth";
-
 export interface NavItem { href: string; label: string; icon: LucideIcon }
 export interface NavGroup { label?: string; items: NavItem[] }
-
 // Sidebar menu per role. Each phase adds the pages it builds.
 export const NAV: Record<Role, NavGroup[]> = {
   student: [
@@ -32,7 +31,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/student/feedback", label: "Feedback", icon: MessageSquare },
         { href: "/student/evaluation", label: "Evaluation", icon: Award },
       ],
-    },
+          },
   ],
   supervisor: [
     {
@@ -55,10 +54,25 @@ export const NAV: Record<Role, NavGroup[]> = {
   coordinator: [
     { items: [{ href: "/coordinator/dashboard", label: "Dashboard", icon: LayoutDashboard }] },
     {
-      label: "Manage",
+      label: "Thesis",
+      items: [
+        { href: "/coordinator/proposals", label: "Proposals", icon: FileText },
+        { href: "/coordinator/assignment-runs", label: "Assignment runs", icon: Shuffle },
+        { href: "/coordinator/assignments", label: "Assignments", icon: UserCheck },
+      ],
+    },
+    {
+      label: "People",
       items: [
         { href: "/coordinator/students", label: "Students & CGPA", icon: ClipboardCheck },
+        { href: "/coordinator/workload", label: "Supervisor workload", icon: BarChart3 },
+      ],
+    },
+    {
+      label: "Setup and insights",
+      items: [
         { href: "/coordinator/research-fields", label: "Research fields", icon: FlaskConical },
+        { href: "/coordinator/reports", label: "Reports", icon: FileBarChart },
       ],
     },
   ],
@@ -79,9 +93,15 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/admin/research-fields", label: "Research fields", icon: FlaskConical },
       ],
     },
+    {
+      label: "System",
+      items: [
+        { href: "/admin/audit-logs", label: "Audit log", icon: ScrollText },
+        { href: "/admin/settings", label: "Settings", icon: Settings },
+      ],
+    },
   ],
 };
-
 export function pageTitle(role: Role, pathname: string): string {
   const items = NAV[role].flatMap((g) => g.items);
   const match = items.find((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
