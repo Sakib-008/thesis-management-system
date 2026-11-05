@@ -6,3 +6,4 @@ from app.models.thesis import (  # noqa: F401
     ProposalReview, ProposalStatus, ProposalVersion, SupervisorAssignment, Thesis, ThesisProposal,
 )
 from app.models.ai import SupervisorRecommendation, SystemSetting, TextEmbedding  # noqa: F401
+from app.models.duplicates import ProposalSimilarity  # noqa: F401
