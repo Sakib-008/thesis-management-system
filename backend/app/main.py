@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.errors import ConflictError, InvalidInputError, NotFoundError
-from app.api.v1 import audit, auth, health, proposals, reference, students, supervisors, users
+from app.core.errors import ConflictError, InvalidInputError, NotFoundError, ServiceUnavailableError
+from app.api.v1 import (
+    audit, auth, health, proposals, recommendations, reference, students, supervisors, users,
+)
 
-app = FastAPI(title="AI-Assisted University Thesis Management System", version="0.4.0")
+app = FastAPI(title="AI-Assisted University Thesis Management System", version="0.5.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +29,7 @@ def _error_handler(status_code: int):
 app.add_exception_handler(NotFoundError, _error_handler(404))
 app.add_exception_handler(ConflictError, _error_handler(409))
 app.add_exception_handler(InvalidInputError, _error_handler(400))
+app.add_exception_handler(ServiceUnavailableError, _error_handler(503))
 
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
@@ -36,5 +39,6 @@ app.include_router(students.router, prefix="/api/v1")
 app.include_router(supervisors.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
 app.include_router(proposals.router, prefix="/api/v1")
+app.include_router(recommendations.router, prefix="/api/v1")
 # Alias so the frontend landing page can probe /health directly
 app.include_router(health.router)

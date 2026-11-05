@@ -79,3 +79,33 @@ export interface ProposalVersion {
   created_at: string;
   content_snapshot: Record<string, unknown>;
 }
+
+
+export interface Recommendation {
+  supervisor_id: number;
+  supervisor_name: string;
+  designation: string;
+  department: string;
+  rank: number;
+  score: number;
+  field: number;
+  semantic: number;
+  availability: number;
+  cosine: number | null;
+  matched_fields: string[];
+  capacity: number;
+  current: number;
+  flags: string[];
+  summary: string;
+  generated_at: string;
+}
+
+export interface RecommendationSettings {
+  weight_field: number;
+  weight_semantic: number;
+  weight_availability: number;
+  top_n: number;
+  min_score: number;
+  cos_lo: number;
+  cos_hi: number;
+}

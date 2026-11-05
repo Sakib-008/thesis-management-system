@@ -11,3 +11,7 @@ class ConflictError(Exception):
 
 class InvalidInputError(Exception):
     pass
+
+
+class ServiceUnavailableError(Exception):
+    """A needed component (for example the AI model) cannot be used right now."""

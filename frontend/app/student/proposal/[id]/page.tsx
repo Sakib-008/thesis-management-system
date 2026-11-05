@@ -80,7 +80,7 @@ export default function ProposalPage() {
               )}
               <Link href={`/student/proposal/${proposal.id}/recommendations`}>
                  <Button variant="secondary" size="sm">
-                   <Sparkles className="h-4 w-4" />AI recommendations (preview)
+                   <Sparkles className="h-4 w-4" />AI recommendations
                  </Button>
               </Link>
            </>

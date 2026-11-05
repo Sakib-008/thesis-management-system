@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     cors_origins: str = "http://localhost:3000"
+    # The sentence-embedding model used for the expertise match. Downloaded automatically on first use.
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     @property
     def cors_origin_list(self) -> list[str]:
