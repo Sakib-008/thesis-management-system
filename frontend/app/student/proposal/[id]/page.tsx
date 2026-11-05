@@ -117,6 +117,11 @@ export default function ProposalPage() {
                         <div>
                           <Badge tone={review.decision === "approved" ? "success" : "warning"}>
                              {review.decision === "approved" ? "Approved" : "Revision requested"}
+                                {review.reason === "duplicate" && (
+                                  <div className="mt-2">
+                                    <Badge tone="danger">Too similar to an existing proposal</Badge>
+                                  </div>
+                                )}
                           </Badge>
                           <p className="mt-2 whitespace-pre-line text-subtle">
                              {review.comment || "No comment was added."}
