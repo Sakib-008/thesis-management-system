@@ -19,7 +19,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: "Thesis",
       items: [
         { href: "/student/thesis", label: "My thesis", icon: GraduationCap },
-        { href: "/student/proposal/1", label: "Proposal", icon: FileText },
+        { href: "/student/proposal", label: "Proposal", icon: FileText },
         { href: "/student/milestones", label: "Milestones", icon: ListChecks },
         { href: "/student/documents", label: "Documents", icon: FolderOpen },
       ],

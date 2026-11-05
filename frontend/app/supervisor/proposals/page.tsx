@@ -1,116 +1,89 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { Check, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { DemoBanner } from "@/components/ui/DemoBanner";
-import { Field, Textarea } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, Td } from "@/components/ui/Table";
-import { useToast } from "@/components/ui/Toast";
-import { daysAgoLabel } from "@/lib/format";
-import { SUPERVISOR_PROPOSALS } from "@/lib/mock/supervisorDemo";
-import { PROPOSAL_STATUS_TONE, ProposalStatus } from "@/lib/mock/thesisDemo";
-import { cn } from "@/lib/cn";
-
-type Decision = "approve" | "revise";
+import { ProposalDetails } from "@/components/proposals/ProposalDetails";
+import { apiGet, errorMessage } from "@/lib/apiClient";
+import { timeAgo } from "@/lib/format";
+import { STATUS_BADGE, STATUS_LABEL } from "@/lib/proposalStatus";
+import { Proposal } from "@/lib/types";
 
 export default function SupervisorProposalsPage() {
-  const toast = useToast();
-  const [proposals, setProposals] = useState(SUPERVISOR_PROPOSALS);
-  const [reviewing, setReviewing] = useState<(typeof SUPERVISOR_PROPOSALS)[number] | null>(null);
-  const [decision, setDecision] = useState<Decision>("approve");
-  const [comment, setComment] = useState("");
+  const [items, setItems] = useState<Proposal[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<Proposal | null>(null);
 
-  const awaiting = (s: ProposalStatus) => s === "Submitted" || s === "Under review";
-
-  function open(p: (typeof SUPERVISOR_PROPOSALS)[number]) {
-    setReviewing(p);
-    setDecision("approve");
-    setComment("");
-  }
-
-  function submit(e: FormEvent) {
-    e.preventDefault();
-    if (!reviewing) return;
-    const status: ProposalStatus = decision === "approve" ? "Approved" : "Revision required";
-    setProposals((list) => list.map((p) => (p.id === reviewing.id ? { ...p, status } : p)));
-    toast.success(`${decision === "approve" ? "Approved" : "Revision requested for"} "${reviewing.title}" (demo: not saved yet)`);
-    setReviewing(null);
-  }
-
-  const waitingCount = proposals.filter((p) => awaiting(p.status)).length;
+  useEffect(() => {
+    apiGet<Proposal[]>("/api/v1/proposals")
+      .then(setItems)
+      .catch((e) => { setError(errorMessage(e)); setItems([]); });
+  }, []);
 
   return (
     <>
-      <PageHeader title="Proposals" description={`${waitingCount} proposal${waitingCount === 1 ? "" : "s"} waiting for your review.`} />
-      <DemoBanner />
+      <PageHeader
+         title="Proposals"
+         description="The thesis proposals of the students assigned to you. The coordinator reviews and approves them."
+      />
+      {error && <Alert>{error}</Alert>}
 
       <Card>
-        <Table headers={["Student", "Proposal", "Research fields", "Submitted", "Status", ""]}>
-          {proposals.map((p) => (
-            <tr key={p.id} className="hover:bg-ink/[0.02]">
-              <Td className="font-medium">{p.student}</Td>
-              <Td className="max-w-[260px] truncate">{p.title}</Td>
-              <Td>
-                <div className="flex flex-wrap gap-1.5">{p.fields.map((f) => <Badge key={f} tone="brand">{f}</Badge>)}</div>
-              </Td>
-              <Td className="text-subtle">{daysAgoLabel(p.daysAgo)}</Td>
-              <Td><Badge tone={PROPOSAL_STATUS_TONE[p.status]}>{p.status}</Badge></Td>
-              <Td className="text-right">
-                <Button size="sm" variant={awaiting(p.status) ? "primary" : "secondary"} onClick={() => open(p)}>
-                  {awaiting(p.status) ? "Review" : "View"}
-                </Button>
-              </Td>
-            </tr>
+        <Table
+          headers={["Student", "Proposal", "Fields", "Submitted", "Status", ""]}
+          loading={items === null}
+          emptyText={
+             items !== null && items.length === 0
+               ? "No proposals yet. You will see the proposals of students once they are assigned to you."
+               : undefined
+          }
+        >
+          {(items ?? []).map((p) => (
+             <tr key={p.id} className="hover:bg-ink/[0.02]">
+               <Td className="font-medium">{p.student?.full_name ?? "Unknown"}</Td>
+               <Td className="max-w-[260px] truncate">{p.title || "Untitled"}</Td>
+               <Td>
+                 <div className="flex flex-wrap gap-1.5">
+                    {p.fields.map((f) => <Badge key={f.id} tone="brand">{f.name}</Badge>)}
+                 </div>
+               </Td>
+               <Td className="text-subtle">{p.submitted_at ? timeAgo(p.submitted_at) : "-"}</Td>
+               <Td><Badge tone={STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status]}</Badge></Td>
+               <Td className="text-right">
+                 <Button size="sm" variant="secondary" onClick={() => setOpen(p)}>View</Button>
+               </Td>
+             </tr>
           ))}
         </Table>
       </Card>
 
-      <Modal open={reviewing !== null} title="Review proposal" onClose={() => setReviewing(null)}
-        footer={
-          reviewing && awaiting(reviewing.status) ? (
-            <>
-              <Button variant="secondary" onClick={() => setReviewing(null)}>Cancel</Button>
-              <Button type="submit" form="review-proposal-form">Submit review</Button>
-            </>
-          ) : (
-            <Button variant="secondary" onClick={() => setReviewing(null)}>Close</Button>
-          )
-        }>
-        {reviewing && (
-          <div className="space-y-4 text-sm">
-            <div>
-              <div className="font-semibold">{reviewing.title}</div>
-              <div className="text-xs text-subtle">{reviewing.student} · {daysAgoLabel(reviewing.daysAgo)}</div>
-            </div>
-            <p className="text-subtle">{reviewing.abstract}</p>
-            <div className="flex flex-wrap gap-1.5">{reviewing.fields.map((f) => <Badge key={f} tone="brand">{f}</Badge>)}</div>
+      <Modal
+        open={open !== null}
+        size="lg"
+        title="Thesis proposal"
+        onClose={() => setOpen(null)}
+        footer={<Button variant="secondary" onClick={() => setOpen(null)}>Close</Button>}
+      >
+        {open && (
+          <div className="space-y-5">
+             <div>
+               <div className="font-semibold">{open.title || "Untitled"}</div>
+               <div className="mt-1 text-xs text-subtle">
+                 {open.student?.full_name} · version {open.version_count}
+               </div>
+             </div>
 
-            {awaiting(reviewing.status) && (
-              <form id="review-proposal-form" className="space-y-4 border-t border-line pt-4" onSubmit={submit}>
-                <div className="grid grid-cols-2 gap-2">
-                  {([["approve", "Approve", Check], ["revise", "Request revision", RotateCcw]] as const).map(([value, label, Icon]) => (
-                    <button key={value} type="button" aria-pressed={decision === value} onClick={() => setDecision(value)}
-                      className={cn(
-                        "flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
-                        decision === value ? "border-brand bg-brand/10 text-brand" : "border-line text-subtle hover:bg-ink/5",
-                      )}>
-                      <Icon className="h-4 w-4" />{label}
-                    </button>
-                  ))}
-                </div>
-                <Field label="Comment for the student" hint={decision === "revise" ? "Say what needs to change." : "Optional."}>
-                  <Textarea value={comment} onChange={(e) => setComment(e.target.value)} required={decision === "revise"} />
-                </Field>
-              </form>
-            )}
-          </div>
-        )}
-      </Modal>
-    </>
-  );
+
+
+                 <ProposalDetails proposal={open} />
+               </div>
+             )}
+           </Modal>
+         </>
+    );
 }
