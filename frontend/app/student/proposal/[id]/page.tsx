@@ -1,93 +1,157 @@
+"use client";
+
 import Link from "next/link";
-import { History, MessageSquareText, Sparkles } from "lucide-react";
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { History, MessageSquareText, Pencil, Send, Sparkles } from "lucide-react";
+import { ProposalDetails } from "@/components/proposals/ProposalDetails";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { DemoBanner } from "@/components/ui/DemoBanner";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Spinner } from "@/components/ui/Spinner";
 import { StatusTimeline } from "@/components/ui/StatusTimeline";
-import { daysAgoLabel } from "@/lib/format";
+import { useToast } from "@/components/ui/Toast";
+import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
+import { timeAgo } from "@/lib/format";
 import {
-  PROPOSAL, PROPOSAL_STATUS_TONE, PROPOSAL_STEPS, PROPOSAL_VERSIONS, proposalStep,
-} from "@/lib/mock/thesisDemo";
+  isEditable, STATUS_BADGE, STATUS_LABEL, timelineStep, TIMELINE_STEPS,
+} from "@/lib/proposalStatus";
+import { Proposal, ProposalVersion } from "@/lib/types";
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="mb-1.5 text-sm font-semibold">{title}</h3>
-      <div className="text-sm text-subtle">{children}</div>
-    </div>
-  );
-}
+
 
 export default function ProposalPage() {
-  const step = proposalStep(PROPOSAL.status);
+  const params = useParams<{ id: string }>();
+  const toast = useToast();
+  const [proposal, setProposal] = useState<Proposal | null>(null);
+  const [versions, setVersions] = useState<ProposalVersion[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setProposal(await apiGet<Proposal>(`/api/v1/proposals/${params.id}`));
+      setVersions(await apiGet<ProposalVersion[]>(`/api/v1/proposals/${params.id}/versions`));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }, [params.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function submit() {
+    setSubmitting(true);
+    try {
+      await apiPost("/api/v1/proposals/me/submit");
+      toast.success("Proposal submitted for review");
+      await load();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!proposal) return <Spinner className="mt-20 h-8 w-8" />;
+
+  const editable = isEditable(proposal.status);
+  const review = proposal.latest_review;
+
   return (
     <>
       <PageHeader
-        title={PROPOSAL.title}
-        description="Your thesis proposal and its review status."
-        actions={
-          <>
-            <Badge tone={PROPOSAL_STATUS_TONE[PROPOSAL.status]}>{PROPOSAL.status}</Badge>
-            <Link href="/student/proposal/1/recommendations">
-              <Button variant="secondary" size="sm"><Sparkles className="h-4 w-4" />AI recommendations</Button>
-            </Link>
-          </>
-        }
+         title={proposal.title || "Untitled proposal"}
+         description="Your thesis proposal and its review status."
+         actions={
+           <>
+              <Badge tone={STATUS_BADGE[proposal.status]}>{STATUS_LABEL[proposal.status]}</Badge>
+              {editable && (
+                 <Link href="/student/proposal/new">
+                   <Button variant="secondary" size="sm"><Pencil className="h-4 w-4" />Edit</Button>
+                 </Link>
+              )}
+              {editable && (
+                 <Button size="sm" onClick={submit} loading={submitting}>
+                   <Send className="h-4 w-4" />Submit for review
+                 </Button>
+              )}
+              <Link href={`/student/proposal/${proposal.id}/recommendations`}>
+                 <Button variant="secondary" size="sm">
+                   <Sparkles className="h-4 w-4" />AI recommendations (preview)
+                 </Button>
+              </Link>
+           </>
+         }
       />
-      <DemoBanner />
 
       <Card className="mb-6">
         <CardHeader title="Review progress" />
-        <CardContent><StatusTimeline steps={PROPOSAL_STEPS} current={step} warning={PROPOSAL.status === "Revision required"} /></CardContent>
+        <CardContent>
+          <StatusTimeline
+             steps={TIMELINE_STEPS}
+             current={timelineStep(proposal.status)}
+             warning={proposal.status === "revision_required"}
+          />
+        </CardContent>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="Proposal" />
-          <CardContent className="space-y-5">
-            <Section title="Abstract">{PROPOSAL.abstract}</Section>
-            <Section title="Problem statement">{PROPOSAL.problemStatement}</Section>
-            <Section title="Objectives">
-              <ul className="list-disc space-y-1 pl-5">{PROPOSAL.objectives.map((o) => <li key={o}>{o}</li>)}</ul>
-            </Section>
-            <Section title="Methodology">{PROPOSAL.methodology}</Section>
-            <Section title="Expected outcome">{PROPOSAL.expectedOutcome}</Section>
-            <Section title="References">{PROPOSAL.references}</Section>
-            <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-              {PROPOSAL.fields.map((f) => <Badge key={f} tone="brand">{f}</Badge>)}
-              {PROPOSAL.keywords.map((k) => <Badge key={k}>{k}</Badge>)}
-            </div>
-          </CardContent>
+          <CardContent><ProposalDetails proposal={proposal} /></CardContent>
         </Card>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader title="Reviewer comment" />
-            <CardContent className="flex gap-3 text-sm">
-              <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />
-              <p className="text-subtle">{PROPOSAL.reviewerComment}</p>
-            </CardContent>
-          </Card>
+         <div className="space-y-6">
+           <Card>
+             <CardHeader title="Coordinator feedback" />
 
-          <Card>
-            <CardHeader title="Version history" />
-            <ul className="divide-y divide-line">
-              {PROPOSAL_VERSIONS.map((v) => (
-                <li key={v.version} className="flex items-start gap-3 px-5 py-3.5 text-sm">
-                  <History className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />
-                  <div>
-                    <div className="font-medium">Version {v.version}</div>
-                    <div className="text-subtle">{v.note}</div>
-                    <div className="text-xs text-subtle">{daysAgoLabel(v.daysAgo)}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      </div>
-    </>
-  );
+
+
+                 <CardContent className="text-sm">
+                   {review ? (
+                      <div className="flex gap-3">
+                        <MessageSquareText className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />
+                        <div>
+                          <Badge tone={review.decision === "approved" ? "success" : "warning"}>
+                             {review.decision === "approved" ? "Approved" : "Revision requested"}
+                          </Badge>
+                          <p className="mt-2 whitespace-pre-line text-subtle">
+                             {review.comment || "No comment was added."}
+                          </p>
+                          <p className="mt-2 text-xs text-subtle">
+                             {review.reviewer?.full_name ?? "Coordinator"} · {timeAgo(review.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                   ) : (
+                      <p className="text-subtle">No feedback yet.</p>
+                   )}
+                 </CardContent>
+               </Card>
+
+               <Card>
+                  <CardHeader title="Version history" description="A new version is saved each time you submit." />
+                  {versions.length === 0 ? (
+                     <p className="px-5 py-6 text-sm text-subtle">Nothing submitted yet.</p>
+                  ) : (
+                     <ul className="divide-y divide-line">
+                       {versions.map((v) => (
+                         <li key={v.id} className="flex items-start gap-3 px-5 py-3.5 text-sm">
+                           <History className="mt-0.5 h-4 w-4 shrink-0 text-subtle" />
+                           <div>
+                             <div className="font-medium">Version {v.version_no}</div>
+                             <div className="text-xs text-subtle">Submitted {timeAgo(v.created_at)}</div>
+                           </div>
+                         </li>
+                       ))}
+                     </ul>
+                  )}
+               </Card>
+             </div>
+           </div>
+         </>
+    );
 }

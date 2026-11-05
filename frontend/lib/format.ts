@@ -26,6 +26,10 @@ const ACTION_LABELS: Record<string, string> = {
   "designation.update": "Changed a designation's default capacity",
   "supervisor.update": "Updated a supervisor's designation or capacity",
   "student.verify_cgpa": "Verified a student's CGPA",
+  "proposal.submit": "Submitted a thesis proposal",
+  "proposal.start_review": "Started reviewing a proposal",
+  "proposal.approved": "Approved a proposal",
+  "proposal.revision_required": "Asked for changes to a proposal",
 };
 
 // Turns an audit entry like {action: "department.create", meta: {name: "CSE"}} into readable text.
