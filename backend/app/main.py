@@ -5,10 +5,10 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError, ServiceUnavailableError
 from app.api.v1 import (
-    audit, auth, health, proposals, recommendations, reference, students, supervisors, users,
+    audit, auth, duplicates, health, proposals, recommendations, reference, students, supervisors, users,
 )
 
-app = FastAPI(title="AI-Assisted University Thesis Management System", version="0.5.0")
+app = FastAPI(title="AI-Assisted University Thesis Management System", version="0.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,5 +40,6 @@ app.include_router(supervisors.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
 app.include_router(proposals.router, prefix="/api/v1")
 app.include_router(recommendations.router, prefix="/api/v1")
+app.include_router(duplicates.router, prefix="/api/v1")
 # Alias so the frontend landing page can probe /health directly
 app.include_router(health.router)
