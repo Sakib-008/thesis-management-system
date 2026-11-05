@@ -109,3 +109,27 @@ export interface RecommendationSettings {
   cos_lo: number;
   cos_hi: number;
 }
+
+
+export interface DuplicateMatch {
+  id: number;
+  similarity: number;
+  level: "high" | "possible";
+  method: "embedding" | "title";
+  decision: "pending" | "dismissed" | "confirmed";
+  decision_note: string;
+  decided_at: string | null;
+  checked_at: string;
+  matched: Proposal;
+}
+
+export interface DuplicateFlag {
+  proposal_id: number;
+  level: "high" | "possible";
+  similarity: number;
+}
+
+export interface DuplicateSettings {
+  high_threshold: number;
+  possible_threshold: number;
+}

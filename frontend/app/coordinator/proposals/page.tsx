@@ -12,50 +12,65 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, Td } from "@/components/ui/Table";
 import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
+import { DuplicatePanel } from "@/components/duplicates/DuplicatePanel";
 import { ProposalDetails } from "@/components/proposals/ProposalDetails";
 import { RecommendationPanel } from "@/components/recommendations/RecommendationPanel";
 import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
 import { timeAgo } from "@/lib/format";
 import { awaitingReview, STATUS_BADGE, STATUS_LABEL } from "@/lib/proposalStatus";
-import { Proposal } from "@/lib/types";
+import { DuplicateFlag, Proposal } from "@/lib/types";
 
-type Filter = "review" | "revision" | "approved" | "all";
-
-const MATCHES: Record<Filter, (p: Proposal) => boolean> = {
-  review: (p) => awaitingReview(p.status),
-  revision: (p) => p.status === "revision_required",
-  approved: (p) => p.status === "approved",
-  all: () => true,
-};
+type Filter = "review" | "duplicates" | "revision" | "approved" | "all";
 
 export default function CoordinatorProposalsPage() {
   const toast = useToast();
   const [items, setItems] = useState<Proposal[] | null>(null);
+  const [flags, setFlags] = useState<Record<number, DuplicateFlag>>({});
   const [loadError, setLoadError] = useState<string | null>(null);
-
   const [filter, setFilter] = useState<Filter>("review");
   const [open, setOpen] = useState<Proposal | null>(null);
   const [decision, setDecision] = useState<Decision>("approve");
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Proposal[]> => {
     try {
-      setItems(await apiGet<Proposal[]>("/api/v1/proposals"));
+      const [list, pending] = await Promise.all([
+        apiGet<Proposal[]>("/api/v1/proposals"),
+        apiGet<DuplicateFlag[]>("/api/v1/duplicates/pending"),
+      ]);
+      setItems(list);
+      setFlags(Object.fromEntries(pending.map((f) => [f.proposal_id, f])));
       setLoadError(null);
+      return list;
     } catch (e) {
       setLoadError(errorMessage(e));
       setItems([]);
+      return [];
     }
   }, []);
 
-  useEffect(() => {
-    load();
+  useEffect(() => { load(); }, [load]);
+
+  // After something changes inside the dialog: reload the lists and the proposal being viewed.
+  const refreshOpen = useCallback(async () => {
+    const list = await load();
+    setOpen((current) => (current ? list.find((p) => p.id === current.id) ?? null : null));
   }, [load]);
 
+  const matches = (f: Filter, p: Proposal) => {
+    switch (f) {
+      case "review": return awaitingReview(p.status);
+      case "duplicates": return flags[p.id] !== undefined;
+      case "revision": return p.status === "revision_required";
+      case "approved": return p.status === "approved";
+      default: return true;
+    }
+  };
+
   const all = items ?? [];
-  const visible = all.filter(MATCHES[filter]);
-  const count = (f: Filter) => all.filter(MATCHES[f]).length;
+  const visible = all.filter((p) => matches(filter, p));
+  const count = (f: Filter) => all.filter((p) => matches(f, p)).length;
 
   function openReview(p: Proposal) {
     setOpen(p);
@@ -67,11 +82,7 @@ export default function CoordinatorProposalsPage() {
     if (!open) return;
     setBusy(true);
     try {
-      setOpen(
-        await apiPost<Proposal>(
-          `/api/v1/proposals/${open.id}/start-review`
-        )
-      );
+      setOpen(await apiPost<Proposal>(`/api/v1/proposals/${open.id}/start-review`));
       await load();
     } catch (e) {
       toast.error(errorMessage(e));
@@ -89,9 +100,7 @@ export default function CoordinatorProposalsPage() {
         decision: decision === "approve" ? "approved" : "revision_required",
         comment,
       });
-      toast.success(
-        decision === "approve" ? "Proposal approved" : "Revision requested"
-      );
+      toast.success(decision === "approve" ? "Proposal approved" : "Revision requested");
       setOpen(null);
       await load();
     } catch (err) {
@@ -107,7 +116,6 @@ export default function CoordinatorProposalsPage() {
         title="Proposals"
         description="Review every submitted proposal. Approved proposals move on to supervisor allocation."
       />
-
       {loadError && <Alert>{loadError}</Alert>}
 
       <Tabs
@@ -115,6 +123,7 @@ export default function CoordinatorProposalsPage() {
         onChange={setFilter}
         tabs={[
           { id: "review", label: "Needs review", count: count("review") },
+          { id: "duplicates", label: "Possible duplicates", count: count("duplicates") },
           { id: "revision", label: "Revision required", count: count("revision") },
           { id: "approved", label: "Approved", count: count("approved") },
           { id: "all", label: "All", count: all.length },
@@ -123,54 +132,35 @@ export default function CoordinatorProposalsPage() {
 
       <Card>
         <Table
-          headers={[
-            "Student",
-            "Proposal",
-            "Fields",
-            "Submitted",
-            "Version",
-            "Status",
-            "",
-          ]}
+          headers={["Student", "Proposal", "Fields", "Submitted", "Version", "Status", ""]}
           loading={items === null}
-          emptyText={
-            items !== null && visible.length === 0
-              ? "No proposals in this view."
-              : undefined
-          }
+          emptyText={items !== null && visible.length === 0 ? "No proposals in this view." : undefined}
         >
           {visible.map((p) => (
             <tr key={p.id} className="hover:bg-ink/[0.02]">
-              <Td className="font-medium">
-                {p.student?.full_name ?? "Unknown"}
-              </Td>
-              <Td className="max-w-[240px] truncate">
-                {p.title || "Untitled"}
+              <Td className="font-medium">{p.student?.full_name ?? "Unknown"}</Td>
+              <Td className="max-w-[260px]">
+                <div className="truncate">{p.title || "Untitled"}</div>
+                {flags[p.id] && (
+                  <div className="mt-1">
+                    <Badge tone={flags[p.id].level === "high" ? "danger" : "warning"}>
+                      {flags[p.id].level === "high" ? "Likely" : "Possible"} duplicate ·{" "}
+                      {Math.round(flags[p.id].similarity)}%
+                    </Badge>
+                  </div>
+                )}
               </Td>
               <Td>
                 <div className="flex flex-wrap gap-1.5">
-                  {p.fields.map((f) => (
-                    <Badge key={f.id} tone="brand">
-                      {f.name}
-                    </Badge>
-                  ))}
+                  {p.fields.map((f) => <Badge key={f.id} tone="brand">{f.name}</Badge>)}
                 </div>
               </Td>
-              <Td className="text-subtle">
-                {p.submitted_at ? timeAgo(p.submitted_at) : "-"}
-              </Td>
+              <Td className="text-subtle">{p.submitted_at ? timeAgo(p.submitted_at) : "-"}</Td>
               <Td className="text-subtle">v{p.version_count}</Td>
-              <Td>
-                <Badge tone={STATUS_BADGE[p.status]}>
-                  {STATUS_LABEL[p.status]}
-                </Badge>
-              </Td>
+              <Td><Badge tone={STATUS_BADGE[p.status]}>{STATUS_LABEL[p.status]}</Badge></Td>
               <Td className="text-right">
-                <Button
-                  size="sm"
-                  variant={awaitingReview(p.status) ? "primary" : "secondary"}
-                  onClick={() => openReview(p)}
-                >
+                <Button size="sm" variant={awaitingReview(p.status) ? "primary" : "secondary"}
+                  onClick={() => openReview(p)}>
                   {awaitingReview(p.status) ? "Review" : "View"}
                 </Button>
               </Td>
@@ -187,47 +177,24 @@ export default function CoordinatorProposalsPage() {
         footer={
           open && awaitingReview(open.status) ? (
             <>
-              <Button variant="secondary" onClick={() => setOpen(null)}>
-                Cancel
-              </Button>
-
+              <Button variant="secondary" onClick={() => setOpen(null)}>Cancel</Button>
               {open.status !== "under_review" && (
-                <Button
-                  variant="secondary"
-                  loading={busy}
-                  onClick={markUnderReview}
-                >
-                  Mark under review
-                </Button>
+                <Button variant="secondary" loading={busy} onClick={markUnderReview}>Mark under review</Button>
               )}
-
-              <Button
-                type="submit"
-                form="review-form"
-                loading={busy}
-              >
-                Submit review
-              </Button>
+              <Button type="submit" form="review-form" loading={busy}>Submit review</Button>
             </>
           ) : (
-            <Button variant="secondary" onClick={() => setOpen(null)}>
-              Close
-            </Button>
+            <Button variant="secondary" onClick={() => setOpen(null)}>Close</Button>
           )
         }
       >
         {open && (
           <div className="space-y-5">
             <div>
-              <div className="font-semibold">
-                {open.title || "Untitled"}
-              </div>
-
+              <div className="font-semibold">{open.title || "Untitled"}</div>
               <div className="mt-1 flex items-center gap-2 text-xs text-subtle">
                 {open.student?.full_name} · version {open.version_count}
-                <Badge tone={STATUS_BADGE[open.status]}>
-                  {STATUS_LABEL[open.status]}
-                </Badge>
+                <Badge tone={STATUS_BADGE[open.status]}>{STATUS_LABEL[open.status]}</Badge>
               </div>
             </div>
 
@@ -236,35 +203,22 @@ export default function CoordinatorProposalsPage() {
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-subtle">
                   Earlier decision (version {open.latest_review.version_no})
                 </div>
-                <p className="whitespace-pre-line">
-                  {open.latest_review.comment || "No comment."}
-                </p>
+                <p className="whitespace-pre-line">{open.latest_review.comment || "No comment."}</p>
               </div>
             )}
 
             <ProposalDetails proposal={open} />
 
-            {/* AI supervisor recommendations */}
+            <DuplicatePanel proposal={open} awaiting={awaitingReview(open.status)} onChanged={refreshOpen} />
+
             <RecommendationPanel proposalId={open.id} />
 
             {awaitingReview(open.status) && (
-              <form
-                id="review-form"
-                className="space-y-4 border-t border-line pt-4"
-                onSubmit={submitReview}
-              >
-                <DecisionToggle
-                  value={decision}
-                  onChange={setDecision}
-                />
-
+              <form id="review-form" className="space-y-4 border-t border-line pt-4" onSubmit={submitReview}>
+                <DecisionToggle value={decision} onChange={setDecision} />
                 <Field
                   label="Comment for the student"
-                  hint={
-                    decision === "revise"
-                      ? "Required: say what needs to change."
-                      : "Optional."
-                  }
+                  hint={decision === "revise" ? "Required: say what needs to change." : "Optional."}
                 >
                   <Textarea
                     value={comment}

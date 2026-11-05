@@ -32,6 +32,10 @@ const ACTION_LABELS: Record<string, string> = {
   "proposal.revision_required": "Asked for changes to a proposal",
   "recommendation.generate": "Generated supervisor recommendations",
   "settings.update_recommendation": "Changed the AI recommendation settings",
+  "duplicate.check": "Checked a proposal for duplicates",
+  "duplicate.dismiss": "Marked a similar proposal as not a duplicate",
+  "duplicate.confirm": "Asked for a revision: duplicate idea",
+  "settings.update_duplicate": "Changed the duplicate check settings",
 };
 
 // Turns an audit entry like {action: "department.create", meta: {name: "CSE"}} into readable text.

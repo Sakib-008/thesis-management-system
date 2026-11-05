@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_roles
@@ -7,7 +7,7 @@ from app.db.session import get_db
 from app.models.thesis import ProposalStatus
 from app.models.user import User, UserRole
 from app.schemas.proposal import ProposalIn, ProposalOut, ReviewIn, ReviewOut, VersionOut
-from app.services import proposal_service as svc
+from app.services import duplicate_service, proposal_service as svc
 
 router = APIRouter(prefix="/proposals", tags=["proposals"])
 
@@ -34,9 +34,13 @@ def save_my_proposal(body: ProposalIn, user: User = Depends(student_only), db: S
 
 
 @router.post("/me/submit", response_model=ProposalOut)
-def submit_my_proposal(user: User = Depends(student_only), db: Session = Depends(get_db)):
+def submit_my_proposal(
+    background: BackgroundTasks, user: User = Depends(student_only), db: Session = Depends(get_db)
+):
     proposal = svc.submit(db, user)
     db.commit()
+    # The duplicate check runs after the response is sent, so a slow or unavailable AI model never blocks a student.
+    background.add_task(duplicate_service.run_check_in_background, proposal.id, user.id)
     return svc.serialize(db, proposal)
 
 
@@ -44,9 +48,6 @@ def submit_my_proposal(user: User = Depends(student_only), db: Session = Depends
 def list_proposals(status: ProposalStatus | None = None, user: User = Depends(not_student),
                    db: Session = Depends(get_db)):
     """Coordinators and admins see every submitted proposal; supervisors see only their students'."""
-
-
-
     return [svc.serialize(db, p) for p in svc.list_for(db, user, status)]
 
 

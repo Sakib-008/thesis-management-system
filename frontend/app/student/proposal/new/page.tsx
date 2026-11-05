@@ -114,6 +114,11 @@ export default function ProposalEditorPage() {
            <MessageSquareWarning className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
            <div>
              <div className="font-medium">Your coordinator asked for changes</div>
+                {review.reason === "duplicate" && (
+                  <p className="mt-1 font-medium text-danger">
+                    Your idea is very similar to an existing proposal. Please change its focus or scope.
+                  </p>
+                )}
              <p className="mt-1 whitespace-pre-line text-subtle">{review.comment}</p>
            </div>
          </div>
