@@ -5,7 +5,7 @@ from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.user import User, UserRole
 from app.schemas.allocation import (
-    AssignIn, AssignmentOut, ReadinessOut, RunOut, RunSummaryOut, WaitingOut,
+    AssignIn, AssignmentOut, MyAssignmentOut, ReadinessOut, RunOut, RunSummaryOut, WaitingOut,
 )
 from app.services import allocation_service as svc
 
@@ -54,3 +54,9 @@ def assign_supervisor(
     svc.assign_manually(db, proposal_id, body.supervisor_id, actor, body.reason)
     db.commit()
     return svc.list_assignments(db)
+
+
+@router.get("/proposals/{proposal_id}/assignment", response_model=MyAssignmentOut)
+def get_assignment(proposal_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """The supervisor of a proposal. Visible to its student, its supervisor and the staff."""
+    return svc.my_assignment(db, proposal_id, user)
