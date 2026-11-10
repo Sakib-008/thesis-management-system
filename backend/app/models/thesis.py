@@ -1,12 +1,13 @@
 import enum
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, Numeric, String, Table, Text, func
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
-from app.models.profile import Student
+from app.models.profile import Student, Supervisor
 from app.models.reference import ResearchField
 from app.models.user import User
 
@@ -18,8 +19,6 @@ class ProposalStatus(str, enum.Enum):
     approved = "approved"
     revision_required = "revision_required"
     resubmitted = "resubmitted"
-
-
 
 
 # Link tables (created by migration 0001)
@@ -98,8 +97,13 @@ class ProposalReview(Base):
     reviewer: Mapped[User | None] = relationship()
 
 
+class AssignmentMethod(str, enum.Enum):
+    merit_allocation = "merit_allocation"  # placed by an allocation run
+    manual_override = "manual_override"  # placed or changed by a coordinator
+
+
 class SupervisorAssignment(Base):
-    """Only the columns Phase 8 needs (who supervises which proposal). Phase 11 completes it."""
+    """Which supervisor supervises which proposal (table created by migration 0001, extended by 0007)."""
 
     __tablename__ = "supervisor_assignments"
 
@@ -107,3 +111,17 @@ class SupervisorAssignment(Base):
     proposal_id: Mapped[int] = mapped_column(ForeignKey("thesis_proposals.id", ondelete="CASCADE"), unique=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), nullable=False)
     supervisor_id: Mapped[int] = mapped_column(ForeignKey("supervisors.id"), nullable=False)
+    assignment_run_id: Mapped[int | None] = mapped_column(ForeignKey("assignment_runs.id"), nullable=True)
+    assigned_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    method: Mapped[AssignmentMethod] = mapped_column(
+        Enum(AssignmentMethod, name="assignment_method", create_type=False), nullable=False,
+        default=AssignmentMethod.merit_allocation,
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="active")
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    match_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 4), nullable=True)  # 0 to 1
+
+    proposal: Mapped[ThesisProposal] = relationship()
+    student: Mapped[Student] = relationship()
+    supervisor: Mapped[Supervisor] = relationship()
