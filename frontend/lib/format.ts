@@ -36,6 +36,9 @@ const ACTION_LABELS: Record<string, string> = {
   "duplicate.dismiss": "Marked a similar proposal as not a duplicate",
   "duplicate.confirm": "Asked for a revision: duplicate idea",
   "settings.update_duplicate": "Changed the duplicate check settings",
+  "allocation.run": "Ran the supervisor allocation",
+  "assignment.assign": "Assigned a supervisor",
+  "assignment.change": "Changed a student's supervisor",
 };
 
 // Turns an audit entry like {action: "department.create", meta: {name: "CSE"}} into readable text.

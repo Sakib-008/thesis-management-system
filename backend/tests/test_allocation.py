@@ -6,11 +6,14 @@ import urllib.error
 import urllib.parse
 from decimal import Decimal
 
+from sqlalchemy import select
+
 from app.ai.allocation import Candidate, Placement, allocate
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError
 from app.db.session import SessionLocal
 from app.models.profile import Student, Supervisor
-from app.models.thesis import ProposalStatus, SupervisorAssignment, ThesisProposal
+from app.models.thesis import AssignmentMethod, ProposalStatus, SupervisorAssignment, ThesisProposal
+from app.models.allocation import AssignmentRun
 from app.models.user import User, UserRole
 from app.services import allocation_service, profile_service, proposal_service, user_service
 
@@ -192,6 +195,142 @@ class TestAllocationServicesAndSecurity(unittest.TestCase):
         code, body = self._request("GET", f"/api/v1/proposals/{rahim_proposal.id}/assignment", token=rahim_token)
         self.assertEqual(code, 200)
         self.assertIn("Rahman", body["supervisor_name"])
+
+    def test_supervisor_views_assigned_proposals(self):
+        # Supervisor Dr. A. Rahman can view proposals of students assigned to him
+        rahman_token = self._login("a.rahman@university.edu")
+        code, body = self._request("GET", "/api/v1/proposals", token=rahman_token)
+        self.assertEqual(code, 200)
+        self.assertIsInstance(body, list)
+        student_names = [p.get("student", {}).get("full_name") for p in body]
+        self.assertIn("Rahim Hasan", student_names)
+
+    def test_coordinator_manual_assignment_at_capacity(self):
+        coord_token = self._login("coordinator@university.edu")
+        with SessionLocal() as db:
+            # Find a supervisor and temporarily set current_count == capacity
+            sup = db.scalar(select(Supervisor).limit(1))
+            original_count = sup.current_count
+            sup.current_count = sup.capacity
+
+            # Find an approved proposal not already assigned to this supervisor
+            assigned_to_sup = select(SupervisorAssignment.proposal_id).where(SupervisorAssignment.supervisor_id == sup.id)
+            proposal = db.scalar(
+                select(ThesisProposal)
+                .where(ThesisProposal.status == ProposalStatus.approved, ~ThesisProposal.id.in_(assigned_to_sup))
+                .limit(1)
+            )
+            db.commit()
+
+            try:
+                code, body = self._request(
+                    "PUT",
+                    f"/api/v1/proposals/{proposal.id}/assignment",
+                    token=coord_token,
+                    data={"supervisor_id": sup.id, "reason": "Testing capacity limit"},
+                )
+                self.assertEqual(code, 409)
+                self.assertIn("at capacity", body.get("detail", ""))
+            finally:
+                with SessionLocal() as reset_db:
+                    reset_sup = reset_db.get(Supervisor, sup.id)
+                    reset_sup.current_count = original_count
+                    reset_db.commit()
+
+    def test_coordinator_manual_assignment_not_approved(self):
+        coord_token = self._login("coordinator@university.edu")
+        with SessionLocal() as db:
+            # Find or temporarily set a proposal to draft / revision_required
+            proposal = db.scalar(select(ThesisProposal).where(ThesisProposal.status != ProposalStatus.approved).limit(1))
+            if proposal is None:
+                proposal = db.scalar(select(ThesisProposal).limit(1))
+                orig_status = proposal.status
+                proposal.status = ProposalStatus.submitted
+                db.commit()
+                try:
+                    code, body = self._request(
+                        "PUT",
+                        f"/api/v1/proposals/{proposal.id}/assignment",
+                        token=coord_token,
+                        data={"supervisor_id": 1, "reason": "Testing unapproved"},
+                    )
+                    self.assertEqual(code, 409)
+                    self.assertIn("Only an approved proposal", body.get("detail", ""))
+                finally:
+                    with SessionLocal() as reset_db:
+                        p = reset_db.get(ThesisProposal, proposal.id)
+                        p.status = orig_status
+                        reset_db.commit()
+            else:
+                code, body = self._request(
+                    "PUT",
+                    f"/api/v1/proposals/{proposal.id}/assignment",
+                    token=coord_token,
+                    data={"supervisor_id": 1, "reason": "Testing unapproved"},
+                )
+                self.assertEqual(code, 409)
+                self.assertIn("Only an approved proposal", body.get("detail", ""))
+
+    def test_coordinator_allocation_run_and_no_cgpa_exposed(self):
+        coord_token = self._login("coordinator@university.edu")
+
+        # Check readiness
+        code, readiness = self._request("GET", "/api/v1/allocation/readiness", token=coord_token)
+        self.assertEqual(code, 200)
+        self.assertIn("waiting_verified", readiness)
+
+        # Trigger run if students are waiting
+        if readiness["waiting_verified"] > 0:
+            code, run_res = self._request("POST", "/api/v1/allocation/runs", token=coord_token)
+            self.assertEqual(code, 200)
+            self.assertIn("matched", run_res)
+            self.assertIn("unmatched", run_res)
+            # Verify no CGPA or merit rank in run response
+            run_str = json.dumps(run_res).lower()
+            self.assertNotIn("cgpa", run_str)
+            self.assertNotIn("merit_rank", run_str)
+            self.assertNotIn("position", run_str)
+
+        # Check list runs
+        code, runs = self._request("GET", "/api/v1/allocation/runs", token=coord_token)
+        self.assertEqual(code, 200)
+        self.assertIsInstance(runs, list)
+        self.assertGreater(len(runs), 0)
+
+        # Check get specific run
+        run_id = runs[0]["id"]
+        code, single_run = self._request("GET", f"/api/v1/allocation/runs/{run_id}", token=coord_token)
+        self.assertEqual(code, 200)
+        single_str = json.dumps(single_run).lower()
+        self.assertNotIn("cgpa", single_str)
+        self.assertNotIn("merit_rank", single_str)
+        self.assertNotIn("position", single_str)
+
+    def test_run_when_no_students_waiting(self):
+        coord_token = self._login("coordinator@university.edu")
+        code, readiness = self._request("GET", "/api/v1/allocation/readiness", token=coord_token)
+        self.assertEqual(code, 200)
+        if readiness["waiting_verified"] == 0:
+            code, body = self._request("POST", "/api/v1/allocation/runs", token=coord_token)
+            self.assertEqual(code, 400)
+            self.assertIn("No students are waiting", body.get("detail", ""))
+
+    @classmethod
+    def tearDownClass(cls):
+        with SessionLocal() as db:
+            db.query(SupervisorAssignment).filter(SupervisorAssignment.method == AssignmentMethod.merit_allocation).delete()
+            db.query(AssignmentRun).delete()
+            db.query(Student).update({"merit_rank": None})
+            sup_counts = {
+                "a.rahman@university.edu": 4,
+                "s.chowdhury@university.edu": 3,
+                "m.karim@university.edu": 2,
+                "k.islam@university.edu": 4,
+            }
+            for s in db.query(Supervisor).all():
+                if s.user and s.user.email in sup_counts:
+                    s.current_count = sup_counts[s.user.email]
+            db.commit()
 
 
 if __name__ == "__main__":
