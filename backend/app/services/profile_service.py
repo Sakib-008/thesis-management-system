@@ -1,3 +1,4 @@
+
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -33,17 +34,25 @@ def list_students(db: Session) -> list[Student]:
 
 
 def upsert_student(db: Session, user: User, *, department_id: int, program_id: int,
-                   batch: str, cgpa: float) -> Student:
+                   batch: str, cgpa: float, student_number: str | None = None) -> Student:
     department = get_or_404(db, Department, department_id, "Department")
     program = get_or_404(db, Program, program_id, "Program")
     if program.department_id != department.id:
         raise InvalidInputError("The selected program does not belong to the selected department")
 
     new_cgpa = Decimal(str(round(cgpa, 2)))
+    student_number = (student_number or "").strip() or None
     student = get_student_by_user(db, user.id)
+    if student_number is not None:
+        taken = db.scalar(select(Student.id).where(
+            Student.student_number == student_number, Student.id != (student.id if student else 0)
+        ))
+        if taken is not None:
+            raise ConflictError("This Student ID is already used by another student")
     if student is None:
         student = Student(user_id=user.id, department_id=department.id, program_id=program.id,
-                          batch=batch.strip(), cgpa=new_cgpa, cgpa_verified=False)
+                          batch=batch.strip(), cgpa=new_cgpa, cgpa_verified=False,
+                          student_number=student_number)
         db.add(student)
     else:
         if student.cgpa != new_cgpa:
@@ -53,6 +62,7 @@ def upsert_student(db: Session, user: User, *, department_id: int, program_id: i
         student.department_id = department.id
         student.program_id = program.id
         student.batch = batch.strip()
+        student.student_number = student_number
         student.cgpa = new_cgpa
     db.flush()
     return student

@@ -27,7 +27,7 @@ def save_my_profile(body: StudentIn, user: User = Depends(student_only), db: Ses
     """Create or update the logged-in student's profile."""
     student = profile_service.upsert_student(
         db, user, department_id=body.department_id, program_id=body.program_id,
-        batch=body.batch, cgpa=body.cgpa,
+        batch=body.batch, cgpa=body.cgpa, student_number=body.student_number,
     )
     db.commit()
     return profile_service.get_student_full(db, student.id)
