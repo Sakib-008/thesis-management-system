@@ -1,4 +1,5 @@
 "use client";
+
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { CalendarClock, MapPin } from "lucide-react";
@@ -17,14 +18,17 @@ import {
   MEETING_LABEL, MEETING_TONE, REPORT_LABEL, REPORT_TONE, formatDateTime, fromDateTimeInputs, toDateTimeInputs,
 } from "@/lib/reportStatus";
 import { Meeting, MeetingStatus } from "@/lib/types";
+
 type Tab = "requests" | "upcoming" | "held" | "other";
 type Action = { kind: "accept" | "decline" | "record"; meeting: Meeting } | null;
+
 const TAB_STATUS: Record<Tab, MeetingStatus[]> = {
   requests: ["requested"],
   upcoming: ["scheduled"],
   held: ["completed"],
   other: ["declined", "cancelled"],
 };
+
 export default function SupervisorMeetingsPage() {
   const toast = useToast();
   const [meetings, setMeetings] = useState<Meeting[] | null>(null);
@@ -35,6 +39,7 @@ export default function SupervisorMeetingsPage() {
   const [form, setForm] = useState({
     date: "", time: "", location: "", reason: "", discussion: "", decisions: "", nextDate: "", nextTime: "10:00",
   });
+
   const load = useCallback(async () => {
     try {
       setMeetings(await apiGet<Meeting[]>("/api/v1/meetings"));
@@ -44,7 +49,9 @@ export default function SupervisorMeetingsPage() {
       setMeetings([]);
     }
   }, []);
+
   useEffect(() => { load(); }, [load]);
+
   const all = meetings ?? [];
   const inTab = (t: Tab) => all.filter((m) => TAB_STATUS[t].includes(m.status));
   const visible = inTab(tab).sort((a, b) =>
@@ -52,6 +59,7 @@ export default function SupervisorMeetingsPage() {
       ? a.meeting_date.localeCompare(b.meeting_date)
       : b.meeting_date.localeCompare(a.meeting_date),
   );
+
   function open(kind: "accept" | "decline" | "record", meeting: Meeting) {
     const { date, time } = toDateTimeInputs(meeting.meeting_date);
     setForm({
@@ -60,6 +68,7 @@ export default function SupervisorMeetingsPage() {
     });
     setAction({ kind, meeting });
   }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!action) return;
@@ -76,7 +85,7 @@ export default function SupervisorMeetingsPage() {
         await apiPost(`${base}/decline`, { reason: form.reason });
         toast.success("Request declined");
       } else {
-                await apiPost(`${base}/complete`, {
+        await apiPost(`${base}/complete`, {
           discussion: form.discussion,
           decisions: form.decisions,
           next_meeting_date: form.nextDate ? fromDateTimeInputs(form.nextDate, form.nextTime) : null,
@@ -91,6 +100,7 @@ export default function SupervisorMeetingsPage() {
       setBusy(false);
     }
   }
+
   async function cancel(id: number) {
     try {
       await apiPost(`/api/v1/meetings/${id}/cancel`);
@@ -100,7 +110,9 @@ export default function SupervisorMeetingsPage() {
       toast.error(errorMessage(e));
     }
   }
+
   const titles = { accept: "Accept the meeting", decline: "Decline the request", record: "Record the meeting" };
+
   return (
     <>
       <PageHeader
@@ -112,6 +124,7 @@ export default function SupervisorMeetingsPage() {
       />
       {error && <Alert>{error}</Alert>}
       {meetings === null && <Spinner className="mt-10 h-8 w-8" />}
+
       {meetings !== null && (
         <>
           <Tabs
@@ -145,6 +158,7 @@ export default function SupervisorMeetingsPage() {
                       {m.mode === "online" ? "Online" : "In person"}{m.location ? ` · ${m.location}` : ""}
                     </span>
                   </div>
+
                   {m.status === "requested" && (
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => open("accept", m)}>Accept</Button>
@@ -155,7 +169,8 @@ export default function SupervisorMeetingsPage() {
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => open("record", m)}>Record meeting</Button>
                       <Button size="sm" variant="secondary" onClick={() => cancel(m.id)}>Cancel</Button>
-                                        )}
+                    </div>
+                  )}
                   {m.status === "completed" && (
                     <div className="space-y-2 border-t border-line pt-3">
                       <p className="whitespace-pre-line text-subtle">{m.discussion}</p>
@@ -180,6 +195,7 @@ export default function SupervisorMeetingsPage() {
           </div>
         </>
       )}
+
       <Modal
         open={action !== null}
         title={action ? titles[action.kind] : ""}
@@ -199,6 +215,7 @@ export default function SupervisorMeetingsPage() {
               <div className="font-medium">{action.meeting.student_names.join(", ")}</div>
               <div className="text-subtle">{action.meeting.agenda}</div>
             </div>
+
             {action.kind === "accept" && (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -228,6 +245,7 @@ export default function SupervisorMeetingsPage() {
                 </Field>
               </>
             )}
+
             {action.kind === "decline" && (
               <Field label="Reason" hint="The student reads this. You can suggest another time.">
                 <Textarea
@@ -237,7 +255,8 @@ export default function SupervisorMeetingsPage() {
                 />
               </Field>
             )}
-                        {action.kind === "record" && (
+
+            {action.kind === "record" && (
               <>
                 <Field label="What was discussed" hint="At least a short note.">
                   <Textarea

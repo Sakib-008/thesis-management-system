@@ -1,48 +1,103 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowRight, CircleDot } from "lucide-react";
-import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
+import { useCallback, useEffect, useState } from "react";
+import { MessageSquareText } from "lucide-react";
+import { FeedbackNotes } from "@/components/supervision/FeedbackNotes";
+import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
-import { DemoBanner } from "@/components/ui/DemoBanner";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { daysAgoLabel } from "@/lib/format";
-import { FEEDBACK_THREADS, OUTCOME_TONE } from "@/lib/mock/thesisDemo";
+import { Spinner } from "@/components/ui/Spinner";
+import { Tabs } from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/Toast";
+import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
+import { FeedbackEntry } from "@/lib/types";
 
-export default function FeedbackPage() {
+type Tab = "open" | "resolved" | "all";
+
+export default function StudentFeedbackPage() {
+  const toast = useToast();
+  const [items, setItems] = useState<FeedbackEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("open");
+
+  const load = useCallback(async () => {
+    try {
+      setItems(await apiGet<FeedbackEntry[]>("/api/v1/feedback"));
+      setError(null);
+    } catch (e) {
+      setError(errorMessage(e));
+      setItems([]);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function resolve(id: number) {
+    try {
+      await apiPost(`/api/v1/feedback/${id}/resolve`);
+      toast.success("Marked as resolved");
+      await load();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  }
+
+  const all = items ?? [];
+  const count = (t: Tab) => (t === "all" ? all.length : all.filter((f) => f.status === t).length);
+  const visible = tab === "all" ? all : all.filter((f) => f.status === tab);
+
   return (
     <>
-      <PageHeader title="Feedback" description="Your supervisor's feedback on everything you have submitted, newest first." />
-      <DemoBanner />
+      <PageHeader
+        title="Feedback"
+        description={
+          "Comments from your supervisor on the work you handed in. " +
+          "Mark each one as resolved when you have dealt with it."
+        }
+      />
+      {error && <Alert>{error}</Alert>}
+      {items === null && <Spinner className="mt-10 h-8 w-8" />}
 
-      <div className="space-y-4">
-        {FEEDBACK_THREADS.map((t) => (
-          <Card key={t.id}>
-            <CardContent className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <Avatar name={t.from.replace("Dr. ", "")} />
-                  <div>
-                    <div className="font-semibold">{t.submission}</div>
-                    <div className="text-xs text-subtle">{t.from} · {daysAgoLabel(t.daysAgo)}</div>
+      {items !== null && (
+        <>
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { id: "open", label: "To act on", count: count("open") },
+              { id: "resolved", label: "Resolved", count: count("resolved") },
+              { id: "all", label: "All", count: count("all") },
+            ]}
+          />
+          {visible.length === 0 && (
+            <Card>
+              <EmptyState
+                icon={MessageSquareText}
+                title={tab === "open" ? "Nothing to act on" : "No feedback here"}
+                description="Feedback appears when your supervisor reviews your work."
+              />
+            </Card>
+          )}
+          <div className="space-y-4">
+            {visible.map((f) => (
+              <Card key={f.id}>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold">{f.milestone_title}</h3>
+                    <Link href={`/student/milestones/${f.milestone_id}/submit`}>
+                      <Button size="sm" variant="secondary">Open milestone</Button>
+                    </Link>
                   </div>
-                </div>
-                <Badge tone={OUTCOME_TONE[t.outcome]}>{t.outcome}</Badge>
-              </div>
-              <ul className="space-y-2 text-sm">
-                {t.points.map((p) => (
-                  <li key={p} className="flex gap-2"><CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-subtle" /><span>{p}</span></li>
-                ))}
-              </ul>
-              {t.outcome === "Revision required" && (
-                <Link href="/student/milestones">
-                  <Button variant="secondary" size="sm">Resubmit revised work<ArrowRight className="h-4 w-4" /></Button>
-                </Link>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                  <FeedbackNotes items={[f]} onResolve={resolve} />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

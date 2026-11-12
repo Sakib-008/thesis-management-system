@@ -48,6 +48,17 @@ const ACTION_LABELS: Record<string, string> = {
   "report.sign": "Signed a weekly report",
   "report.return": "Returned a weekly report",
   "settings.update_reports": "Changed the weekly report settings",
+    "milestone.create": "Created a milestone",
+  "milestone.update": "Changed a milestone",
+  "milestone.delete": "Deleted a milestone",
+  "milestone.submit": "Submitted work for a milestone",
+  "milestone.approve": "Approved a milestone",
+  "milestone.request_revision": "Asked for changes to a milestone",
+  "feedback.add": "Gave feedback on a submission",
+  "feedback.resolve": "Marked feedback as resolved",
+  "document.create": "Uploaded a document",
+  "document.version": "Uploaded a new version of a document",
+  "document.download": "Downloaded a document",
 };
 
 // Turns an audit entry like {action: "department.create", meta: {name: "CSE"}} into readable text.

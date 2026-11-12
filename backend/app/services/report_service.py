@@ -1,6 +1,9 @@
+import re
 from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError
 from app.models.ai import SystemSetting
 from app.models.meetings import Meeting, WeeklyReport
@@ -14,21 +17,47 @@ from app.schemas.reports import (
 from app.services import meeting_service as meetings
 from app.services import proposal_service
 from app.services.audit import log_audit
+
 SETTINGS_KEY = "reports"
 DEFAULT_SETTINGS = {
     "university_name": "Khulna University of Engineering & Technology",
-    "course_code": "CSE 3200",
+    "course_number": "3200",
     "sheet_title": "Weekly Progress Report (Summary)",
     "due_days": 7,
 }
 EDITABLE = ("draft", "returned")  # the student may still change the report
 RATING_LABEL = {"poor": "Poor", "average": "Average", "good": "Good", "excellent": "Excellent"}
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+# Words that are not part of a department's short code: "Electrical and Electronic Engineering" is EEE.
+CODE_SKIP = {"department", "of", "and", "the", "in", "for"}
+
+
+def department_code(name: str) -> str:
+    """The short code of a department, worked out from its name: Computer Science and Engineering -> CSE."""
+    words = [w for w in re.findall(r"[A-Za-z]+", name or "") if w.lower() not in CODE_SKIP]
+    if not words:
+        return ""
+    if len(words) == 1:
+        return words[0][:3].upper()  # a one-word name such as Physics becomes PHY
+    return "".join(w[0] for w in words).upper()
+
+
 # ----------------------------------------------------------------- settings
 def get_settings(db: Session) -> dict:
     row = db.get(SystemSetting, SETTINGS_KEY)
-    return {**DEFAULT_SETTINGS, **(row.value if row else {})}
+    stored = dict(row.value) if row else {}
+    if "course_number" not in stored and stored.get("course_code"):
+        # saved before the department code became automatic: "CSE 3200" now means the number 3200
+        stored["course_number"] = str(stored["course_code"]).split()[-1]
+    stored.pop("course_code", None)
+    return {**DEFAULT_SETTINGS, **stored}
+
+
 def update_settings(db: Session, actor: User, data: ReportSettings) -> dict:
     values = {k: (v.strip() if isinstance(v, str) else v) for k, v in data.model_dump().items()}
     row = db.get(SystemSetting, SETTINGS_KEY)
@@ -40,25 +69,34 @@ def update_settings(db: Session, actor: User, data: ReportSettings) -> dict:
     log_audit(db, actor.id, "settings.update_reports", "settings", None, values)
     db.flush()
     return values
+
+
 # ----------------------------------------------------------------- building the output
 def _due_at(meeting: Meeting, cfg: dict) -> datetime | None:
     if meeting.completed_at is None:
         return None
     return meeting.completed_at + timedelta(days=cfg["due_days"])
+
+
 def _overdue(status: str | None, due_at: datetime | None) -> bool:
     """A report is overdue when it is still missing, a draft or returned after its due date."""
     return status in (None, "draft", "returned") and due_at is not None and _now() > due_at
+
+
 def _header(db: Session, thesis_id: int, cfg: dict) -> SheetHeader:
     students = meetings.students_of_thesis(db, thesis_id)
     department = students[0].department.name if students else ""
     line = department if department.lower().startswith("department of") else f"Department of {department}"
+    course = f"{department_code(department)} {cfg['course_number']}".strip()  # for example CSE 3200
     supervisor = meetings.supervisor_of_thesis(db, thesis_id)
     return SheetHeader(
-        department_line=line, university_name=cfg["university_name"], course_code=cfg["course_code"],
+        department_line=line, university_name=cfg["university_name"], course_code=course,
         sheet_title=cfg["sheet_title"],
         students=[SheetStudent(name=s.user.full_name, student_number=s.student_number) for s in students],
         supervisor_name=supervisor.user.full_name if supervisor else None,
     )
+
+
 def _out(db: Session, report: WeeklyReport, cfg: dict | None = None) -> ReportOut:
     cfg = cfg or get_settings(db)
     due_at = _due_at(report.meeting, cfg)
@@ -70,12 +108,16 @@ def _out(db: Session, report: WeeklyReport, cfg: dict | None = None) -> ReportOu
         returned_reason=report.returned_reason, submitted_at=report.submitted_at, updated_at=report.updated_at,
         due_at=due_at, overdue=_overdue(report.status, due_at), header=_header(db, report.thesis_id, cfg),
     )
+
+
 def _visible_report(db: Session, report: WeeklyReport | None, user: User) -> WeeklyReport:
     if report is None or not meetings.can_view_thesis(db, report.thesis_id, user):
         raise NotFoundError("Report not found")
     if report.status == "draft" and user.role != UserRole.student:
         raise NotFoundError("Report not found")  # a draft is private to the student
     return report
+
+
 # ---------------------------------------------------------------- reading
 def tasks(db: Session, user: User) -> list[TaskOut]:
     thesis_id = meetings.own_thesis_id(db, user)
@@ -97,6 +139,8 @@ def tasks(db: Session, user: User) -> list[TaskOut]:
             report_status=status,
         ))
     return out
+
+
 def get_by_meeting(db: Session, meeting_id: int, user: User) -> ReportOut:
     meeting = db.get(Meeting, meeting_id)
     if meeting is None or not meetings.can_view_thesis(db, meeting.thesis_id, user):
@@ -105,8 +149,12 @@ def get_by_meeting(db: Session, meeting_id: int, user: User) -> ReportOut:
     if report is None or (report.status == "draft" and user.role != UserRole.student):
         raise NotFoundError("No report has been written for this meeting yet")
     return _out(db, report)
+
+
 def get(db: Session, report_id: int, user: User) -> ReportOut:
     return _out(db, _visible_report(db, db.get(WeeklyReport, report_id), user))
+
+
 def list_reports(db: Session, user: User, status: str | None = None) -> list[ReportOut]:
     stmt = select(WeeklyReport).where(WeeklyReport.status != "draft")
     if user.role == UserRole.supervisor:
@@ -120,12 +168,16 @@ def list_reports(db: Session, user: User, status: str | None = None) -> list[Rep
         stmt = stmt.where(WeeklyReport.status == status)
     cfg = get_settings(db)
     return [_out(db, r, cfg) for r in db.scalars(stmt.order_by(WeeklyReport.submitted_at.desc()))]
+
+
 # --------------------------------------------------------------- the student
 def _own_meeting(db: Session, user: User, meeting_id: int) -> Meeting:
     meeting = db.get(Meeting, meeting_id)
     if meeting is None or meeting.thesis_id != meetings.own_thesis_id(db, user):
         raise NotFoundError("Meeting not found")
     return meeting
+
+
 def save_draft(db: Session, user: User, meeting_id: int, data: ReportIn) -> WeeklyReport:
     meeting = _own_meeting(db, user, meeting_id)
     if meeting.status != "completed":
@@ -142,6 +194,8 @@ def save_draft(db: Session, user: User, meeting_id: int, data: ReportIn) -> Week
     report.updated_at = _now()
     db.flush()
     return report
+
+
 def submit(db: Session, user: User, meeting_id: int) -> WeeklyReport:
     meeting = _own_meeting(db, user, meeting_id)
     report = db.scalar(select(WeeklyReport).where(WeeklyReport.meeting_id == meeting.id))
@@ -149,6 +203,7 @@ def submit(db: Session, user: User, meeting_id: int) -> WeeklyReport:
         raise NotFoundError("Save the report before submitting it")
     if report.status not in EDITABLE:
         raise ConflictError("This report has already been submitted")
+
     missing = []
     if len(report.section_a.strip()) < 10:
         missing.append("A: summary of the previous week")
@@ -160,6 +215,7 @@ def submit(db: Session, user: User, meeting_id: int) -> WeeklyReport:
         raise InvalidInputError("Complete these before submitting: " + ", ".join(missing))
     if any(not s.student_number for s in meetings.students_of_thesis(db, report.thesis_id)):
         raise InvalidInputError("Add your Student ID to your profile before submitting a report")
+
     report.status = "submitted"
     report.submitted_at = _now()
     report.updated_at = _now()
@@ -167,12 +223,16 @@ def submit(db: Session, user: User, meeting_id: int) -> WeeklyReport:
     log_audit(db, user.id, "report.submit", "weekly_report", report.id, {"meeting_id": meeting.id})
     db.flush()
     return report
+
+
 # --------------------------------------------------------------- the supervisor
 def _as_supervisor(db: Session, report_id: int, user: User) -> WeeklyReport:
     report = db.get(WeeklyReport, report_id)
     if report is None or not meetings.is_assigned_supervisor(db, report.thesis_id, user):
         raise NotFoundError("Report not found")
     return report
+
+
 def sign(db: Session, report_id: int, user: User, rating: str, comment: str) -> WeeklyReport:
     report = _as_supervisor(db, report_id, user)
     if report.status != "submitted":
@@ -186,6 +246,8 @@ def sign(db: Session, report_id: int, user: User, rating: str, comment: str) -> 
     log_audit(db, user.id, "report.sign", "weekly_report", report.id, {"rating": rating})
     db.flush()
     return report
+
+
 def return_report(db: Session, report_id: int, user: User, reason: str) -> WeeklyReport:
     report = _as_supervisor(db, report_id, user)
     if report.status != "submitted":
@@ -198,6 +260,8 @@ def return_report(db: Session, report_id: int, user: User, reason: str) -> Weekl
     log_audit(db, user.id, "report.return", "weekly_report", report.id)
     db.flush()
     return report
+
+
 # ------------------------------------------------------------- coordinator view
 def overview(db: Session) -> list[OverviewRow]:
     cfg = get_settings(db)
@@ -225,6 +289,8 @@ def overview(db: Session) -> list[OverviewRow]:
             overdue=sum(1 for m in completed if _overdue(by_meeting.get(m.id), _due_at(m, cfg))),
         ))
     return sorted(out, key=lambda r: (-r.overdue, r.student_names[0].casefold() if r.student_names else ""))
+
+
 # ------------------------------------------------------------------- the PDFs
 def _sheet(db: Session, report: WeeklyReport, cfg: dict) -> SheetData:
     header = _header(db, report.thesis_id, cfg)
@@ -239,11 +305,15 @@ def _sheet(db: Session, report: WeeklyReport, cfg: dict) -> SheetData:
         rating=RATING_LABEL.get(report.rating or "") if signed else None,
         comment=report.supervisor_comment if signed else "", draft=report.status in EDITABLE,
     )
+
+
 def pdf_for_report(db: Session, report_id: int, user: User) -> tuple[bytes, str]:
     report = _visible_report(db, db.get(WeeklyReport, report_id), user)
     cfg = get_settings(db)
     name = f"weekly-report-{report.meeting.meeting_date:%Y-%m-%d}.pdf"
     return render([_sheet(db, report, cfg)], "Weekly Progress Report"), name
+
+
 def pdf_for_thesis(db: Session, proposal_id: int, user: User, only_signed: bool) -> tuple[bytes, str]:
     """Every submitted (or only signed) report of one thesis, oldest first: the pack for a defense."""
     proposal = proposal_service.get_visible(db, proposal_id, user)
