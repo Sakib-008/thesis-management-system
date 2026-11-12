@@ -39,6 +39,15 @@ const ACTION_LABELS: Record<string, string> = {
   "allocation.run": "Ran the supervisor allocation",
   "assignment.assign": "Assigned a supervisor",
   "assignment.change": "Changed a student's supervisor",
+  "meeting.request": "Requested a meeting",
+  "meeting.accept": "Accepted a meeting request",
+  "meeting.decline": "Declined a meeting request",
+  "meeting.complete": "Recorded a meeting",
+  "meeting.cancel": "Cancelled a meeting",
+  "report.submit": "Submitted a weekly report",
+  "report.sign": "Signed a weekly report",
+  "report.return": "Returned a weekly report",
+  "settings.update_reports": "Changed the weekly report settings",
 };
 
 // Turns an audit entry like {action: "department.create", meta: {name: "CSE"}} into readable text.

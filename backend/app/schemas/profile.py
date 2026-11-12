@@ -1,5 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
-
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.reference import DesignationOut, NamedRef
 
 
@@ -16,6 +15,11 @@ class StudentIn(BaseModel):
     program_id: int
     batch: str = Field(min_length=1, max_length=20)
     cgpa: float = Field(ge=0, le=4)
+    student_number: str | None = Field(default=None, max_length=30)  # the university ID, printed on reports
+    @field_validator("student_number")
+    @classmethod
+    def blank_means_none(cls, value: str | None) -> str | None:
+        return (value or "").strip() or None
 
 
 class StudentOut(BaseModel):
@@ -27,6 +31,7 @@ class StudentOut(BaseModel):
     department: NamedRef
     program: NamedRef
     batch: str
+    student_number: str | None = None
     cgpa: float
     cgpa_verified: bool
 

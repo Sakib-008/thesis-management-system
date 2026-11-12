@@ -1,7 +1,7 @@
 import {
-  Award, BarChart3, Building2, CalendarClock, ClipboardCheck, FileBarChart, FileCheck, FileText, FlaskConical,
-  FolderOpen, GraduationCap, LayoutDashboard, ListChecks, LucideIcon, Medal, MessageSquare, ScrollText,
-  Settings, Shuffle, UserCheck, UserCircle, Users,
+  Award, BarChart3, Building2, CalendarClock, ClipboardCheck, ClipboardList, FileBarChart, FileCheck, FileSignature,
+  FileText, FlaskConical, FolderOpen, GraduationCap, LayoutDashboard, ListChecks, LucideIcon, Medal, MessageSquare,
+  ScrollText, Settings, Shuffle, UserCheck, UserCircle, Users,
 } from "lucide-react";
 import { Role } from "./auth";
 export interface NavItem { href: string; label: string; icon: LucideIcon }
@@ -28,10 +28,11 @@ export const NAV: Record<Role, NavGroup[]> = {
       label: "Supervision",
       items: [
         { href: "/student/meetings", label: "Meetings", icon: CalendarClock },
+        { href: "/student/reports", label: "Weekly reports", icon: ClipboardList },
         { href: "/student/feedback", label: "Feedback", icon: MessageSquare },
         { href: "/student/evaluation", label: "Evaluation", icon: Award },
       ],
-          },
+    },
   ],
   supervisor: [
     {
@@ -47,6 +48,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/supervisor/students", label: "My students", icon: Users },
         { href: "/supervisor/milestones", label: "Milestones", icon: ListChecks },
         { href: "/supervisor/meetings", label: "Meetings", icon: CalendarClock },
+        { href: "/supervisor/reports", label: "Weekly reports", icon: FileSignature },
         { href: "/supervisor/evaluations", label: "Evaluations", icon: FileCheck },
       ],
     },
@@ -59,6 +61,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/coordinator/proposals", label: "Proposals", icon: FileText },
         { href: "/coordinator/assignment-runs", label: "Assignment runs", icon: Shuffle },
         { href: "/coordinator/assignments", label: "Assignments", icon: UserCheck },
+        { href: "/coordinator/weekly-reports", label: "Progress reports", icon: ClipboardList },
       ],
     },
     {
@@ -91,7 +94,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/admin/departments", label: "Departments", icon: Building2 },
         { href: "/admin/programs", label: "Programs", icon: GraduationCap },
         { href: "/admin/research-fields", label: "Research fields", icon: FlaskConical },
-      ],
+        ],
     },
     {
       label: "System",

@@ -9,6 +9,7 @@ export interface Student {
   department: NamedRef;
   program: NamedRef;
   batch: string;
+  student_number: string | null;
   cgpa: number;
   cgpa_verified: boolean;
 }
@@ -208,4 +209,86 @@ export interface MyAssignment {
   email: string;
   department: string;
   assigned_at: string;
+}
+
+
+export type MeetingStatus = "requested" | "scheduled" | "completed" | "declined" | "cancelled";
+export type ReportStatus = "draft" | "submitted" | "returned" | "signed";
+export type Rating = "poor" | "average" | "good" | "excellent";
+export interface Meeting {
+  id: number;
+  thesis_id: number;
+  proposal_id: number | null;
+  proposal_title: string;
+  student_names: string[];
+  supervisor_name: string | null;
+  meeting_date: string;
+  agenda: string;
+  mode: "in_person" | "online";
+  location: string;
+  status: MeetingStatus;
+  decline_reason: string;
+  discussion: string;
+  decisions: string;
+  next_meeting_date: string | null;
+  completed_at: string | null;
+  created_at: string;
+  report_id: number | null;
+  report_status: ReportStatus | null;
+}
+export interface SheetStudent {
+  name: string;
+  student_number: string | null;
+}
+export interface SheetHeader {
+  department_line: string;
+  university_name: string;
+  course_code: string;
+  sheet_title: string;
+  students: SheetStudent[];
+  supervisor_name: string | null;
+}
+export interface WeeklyReport {
+  id: number;
+  meeting_id: number;
+  meeting_date: string; 
+  status: ReportStatus;
+  section_a: string;
+  section_b: string;
+  next_works: string[];
+  rating: Rating | null;
+  supervisor_comment: string;
+  signed_by_name: string | null;
+  signed_at: string | null;
+  returned_reason: string;
+  submitted_at: string | null;
+  updated_at: string;
+  due_at: string | null;
+  overdue: boolean;
+  header: SheetHeader;
+}
+export interface ReportTask {
+  meeting_id: number;
+  meeting_date: string;
+  completed_at: string | null;
+  due_at: string | null;
+  overdue: boolean;
+  report_id: number | null;
+  report_status: ReportStatus | null;
+}
+export interface ReportOverviewRow {
+  proposal_id: number;
+  title: string;
+  student_names: string[];
+  supervisor_name: string | null;
+  meetings_completed: number;
+  reports_submitted: number;
+  reports_signed: number;
+  overdue: number;
+}
+export interface ReportSettings {
+  university_name: string;
+  course_code: string;
+  sheet_title: string;
+  due_days: number;
 }

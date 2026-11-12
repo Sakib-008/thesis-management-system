@@ -25,6 +25,7 @@ class Student(Base):
     department_id: Mapped[int] = mapped_column(ForeignKey("departments.id"), nullable=False)
     program_id: Mapped[int] = mapped_column(ForeignKey("programs.id"), nullable=False)
     batch: Mapped[str] = mapped_column(String(20), nullable=False)
+    student_number: Mapped[str | None] = mapped_column(String(30), nullable=True)  # the university ID, e.g. 2207001
     cgpa: Mapped[Decimal] = mapped_column(Numeric(3, 2), nullable=False)
     cgpa_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Internal to the allocation service. No schema exposes this column.

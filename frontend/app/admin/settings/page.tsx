@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { DemoBadge } from "@/components/ui/DemoBadge";
 import { DuplicateSettingsCard } from "@/components/duplicates/DuplicateSettingsCard";
+import { ReportSettingsCard } from "@/components/reports/ReportSettingsCard";
 import { Field, Input, Select } from "@/components/ui/Form";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ProgressBar } from "@/components/ui/ProgressBar";
@@ -241,8 +242,9 @@ export default function SettingsPage() {
         </Card>
       </div>
 
-      <div className="mt-6 lg:w-1/2 lg:pr-3">
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <DuplicateSettingsCard />
+        <ReportSettingsCard />
       </div>
     </>
   );
