@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError
 from app.models.profile import Student, Supervisor
 from app.models.reference import Department, Program, ResearchField, SupervisorDesignation
+from app.models.thesis import SupervisorAssignment
 from app.models.user import User
 from app.services.audit import log_audit
 from app.services.reference_service import get_or_404
@@ -46,6 +47,8 @@ def upsert_student(db: Session, user: User, *, department_id: int, program_id: i
         db.add(student)
     else:
         if student.cgpa != new_cgpa:
+            if db.scalar(select(SupervisorAssignment.id).where(SupervisorAssignment.student_id == student.id)):
+                raise ConflictError("Your CGPA can no longer be changed because a supervisor has been assigned")
             student.cgpa_verified = False  # any change to CGPA must be verified again
         student.department_id = department.id
         student.program_id = program.id

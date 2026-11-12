@@ -133,3 +133,79 @@ export interface DuplicateSettings {
   high_threshold: number;
   possible_threshold: number;
 }
+
+
+export interface AllocationMatch {
+  proposal_id: number;
+  student_name: string;
+  title: string;
+  supervisor_id: number;
+  supervisor_name: string;
+  score: number;
+  choice: number;
+}
+
+export interface AllocationUnmatched {
+  proposal_id: number;
+  student_name: string;
+  title: string;
+  reason: "capacity" | "no_good_match";
+  message: string;
+}
+
+export interface AllocationRunSummary {
+  id: number;
+  run_at: string;
+  completed_at: string | null;
+  triggered_by_name: string;
+  status: string;
+  processed: number;
+  matched_count: number;
+  unmatched_count: number;
+}
+
+export interface AllocationRun extends AllocationRunSummary {
+  matched: AllocationMatch[];
+  unmatched: AllocationUnmatched[];
+  skipped_unverified: string[];
+}
+
+export interface AllocationReadiness {
+  waiting_total: number;
+  waiting_verified: number;
+  waiting_unverified: number;
+  open_slots: number;
+  supervisors_with_slots: number;
+  last_run: AllocationRunSummary | null;
+}
+
+export interface Assignment {
+  id: number;
+  proposal_id: number;
+  title: string;
+  student_name: string;
+  supervisor_id: number;
+  supervisor_name: string;
+  designation: string;
+  method: "merit_allocation" | "manual_override";
+  score: number | null;
+  reason: string;
+  assigned_at: string;
+  run_id: number | null;
+}
+
+export interface WaitingStudent {
+  proposal_id: number;
+  title: string;
+  student_name: string;
+  cgpa_verified: boolean;
+  note: string | null;
+}
+
+export interface MyAssignment {
+  supervisor_name: string;
+  designation: string;
+  email: string;
+  department: string;
+  assigned_at: string;
+}

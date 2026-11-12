@@ -1,147 +1,215 @@
 "use client";
-import { FormEvent, useState } from "react";
-import { Pencil, UserPlus } from "lucide-react";
+
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader } from "@/components/ui/Card";
-import { DemoBanner } from "@/components/ui/DemoBanner";
+import { Card } from "@/components/ui/Card";
 import { Field, Select, Textarea } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Table, Td } from "@/components/ui/Table";
+import { Tabs } from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
-import { daysAgoLabel } from "@/lib/format";
-import {
-  ASSIGNABLE_SUPERVISORS, AssignmentRow, ASSIGNMENTS, UNASSIGNED,
-} from "@/lib/mock/coordinatorDemo";
+import { apiGet, apiPut, errorMessage } from "@/lib/apiClient";
+import { timeAgo } from "@/lib/format";
+import { Assignment, Supervisor, WaitingStudent } from "@/lib/types";
+
+type Tab = "waiting" | "assigned";
+
 interface Target {
+  proposalId: number;
   student: string;
   title: string;
-  // set only when changing an existing assignment:
-  rowId?: number;
-  // the supervisor being replaced:
-  current?: string;
+  currentSupervisorId: number | null;
 }
+
 export default function AssignmentsPage() {
   const toast = useToast();
-  const [rows, setRows] = useState<AssignmentRow[]>(ASSIGNMENTS);
-  const [unassigned, setUnassigned] = useState(UNASSIGNED);
-  const [supervisors, setSupervisors] = useState(ASSIGNABLE_SUPERVISORS);
+  const [assigned, setAssigned] = useState<Assignment[] | null>(null);
+  const [waiting, setWaiting] = useState<WaitingStudent[] | null>(null);
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("waiting");
   const [target, setTarget] = useState<Target | null>(null);
-  const [choice, setChoice] = useState("");
+  const [supervisorId, setSupervisorId] = useState("");
   const [reason, setReason] = useState("");
-  function open(t: Target) {
-    setTarget(t);
-    setChoice("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const [a, w, s] = await Promise.all([
+        apiGet<Assignment[]>("/api/v1/assignments"),
+        apiGet<WaitingStudent[]>("/api/v1/assignments/waiting"),
+        apiGet<Supervisor[]>("/api/v1/supervisors"),
+      ]);
+      setAssigned(a);
+      setWaiting(w);
+      setSupervisors(s);
+      return w.length;
+    } catch (e) {
+      setError(errorMessage(e));
+      setAssigned([]);
+      setWaiting([]);
+      return 0;
+    }
+  }, []);
+
+  useEffect(() => {
+    load().then((waitingCount) => setTab(waitingCount > 0 ? "waiting" : "assigned"));
+  }, [load]);
+
+  function openDialog(next: Target) {
+    setTarget(next);
+    setSupervisorId("");
     setReason("");
   }
-  function save(e: FormEvent) {
+
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!target || !choice) return;
-    // keep the supervisors' loads in step with the change
-    setSupervisors((list) =>
-      list.map((s) => {
-              if (s.name === choice) return { ...s, load: s.load + 1 };
-        if (s.name === target.current) return { ...s, load: s.load - 1 };
-        return s;
-      }),
-    );
-    if (target.rowId !== undefined) {
-      setRows((list) =>
-        list.map((r) =>
-          r.id === target.rowId ? { ...r, supervisor: choice, method: "Manual override", daysAgo: 0 } : r,
-        ),
-      );
-    } else {
-      const created: AssignmentRow = {
-        id: Date.now(), student: target.student, title: target.title,
-        supervisor: choice, method: "Manual override", daysAgo: 0,
-      };
-      setRows((list) => [created, ...list]);
-      setUnassigned((list) => list.filter((u) => u.student !== target.student));
+    if (!target || !supervisorId) return;
+    setBusy(true);
+    try {
+      await apiPut(`/api/v1/proposals/${target.proposalId}/assignment`, {
+        supervisor_id: Number(supervisorId),
+        reason,
+      });
+      toast.success(target.currentSupervisorId ? "Supervisor changed" : "Supervisor assigned");
+      setTarget(null);
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
     }
-    toast.success(`${target.student} is now supervised by ${choice} (demo: not saved yet)`);
-    setTarget(null);
   }
+
   return (
     <>
       <PageHeader
         title="Assignments"
-        description="Who supervises whom. You can change any assignment; overrides are recorded with your reason."
+        description="Every student's supervisor. Place students the allocation could not, or change any assignment."
       />
-      <DemoBanner />
-      {unassigned.length > 0 && (
-        <Card className="mb-6 border-warning/30">
-          <CardHeader title="Needs a supervisor" description="The allocation could not place these students." />
-          <ul className="divide-y divide-line">
-            {unassigned.map((u) => (
-              <li key={u.id} className="flex flex-wrap items-center gap-3 px-5 py-4 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{u.student}</div>
-                  <div className="truncate text-subtle">{u.title}</div>
-                </div>
-                <Button size="sm" onClick={() => open({ student: u.student, title: u.title })}>
-                  <UserPlus className="h-4 w-4" />Assign
-                </Button>
-              </li>
+      {error && <Alert>{error}</Alert>}
+
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "waiting", label: "Needs a supervisor", count: waiting?.length ?? 0 },
+          { id: "assigned", label: "Assigned", count: assigned?.length ?? 0 },
+        ]}
+      />
+
+      {tab === "waiting" ? (
+        <Card>
+          <Table
+            headers={["Student", "Proposal", "CGPA", "Note", ""]}
+            loading={waiting === null}
+            emptyText={
+              waiting !== null && waiting.length === 0 ? "Every approved student has a supervisor." : undefined
+            }
+          >
+            {(waiting ?? []).map((w) => (
+              <tr key={w.proposal_id}>
+                <Td className="font-medium">{w.student_name}</Td>
+                <Td className="max-w-[260px] truncate">{w.title}</Td>
+                <Td>
+                  <Badge tone={w.cgpa_verified ? "success" : "warning"}>
+                    {w.cgpa_verified ? "Verified" : "Not verified"}
+                  </Badge>
+                </Td>
+                <Td className="text-subtle">{w.note ?? (w.cgpa_verified ? "-" : "Skipped by the allocation")}</Td>
+                <Td className="text-right">
+                  <Button
+                    size="sm"
+                    onClick={() => openDialog({
+                      proposalId: w.proposal_id, student: w.student_name, title: w.title, currentSupervisorId: null,
+                    })}
+                  >
+                    Assign
+                  </Button>
+                </Td>
+              </tr>
             ))}
-          </ul>
+          </Table>
+        </Card>
+      ) : (
+        <Card>
+          <Table
+            headers={["Student", "Proposal", "Supervisor", "How", "Match", "When", ""]}
+            loading={assigned === null}
+            emptyText={assigned !== null && assigned.length === 0 ? "No assignments yet." : undefined}
+          >
+            {(assigned ?? []).map((a) => (
+              <tr key={a.id}>
+                <Td className="font-medium">{a.student_name}</Td>
+                <Td className="max-w-[220px] truncate">{a.title}</Td>
+                <Td>
+                  <div>{a.supervisor_name}</div>
+                  <div className="text-xs text-subtle">{a.designation}</div>
+                </Td>
+                <Td>
+                  <Badge tone={a.method === "merit_allocation" ? "brand" : "warning"}>
+                    {a.method === "merit_allocation" ? "Allocation" : "Manual"}
+                  </Badge>
+                  {a.reason && <div className="mt-1 max-w-[200px] text-xs text-subtle">{a.reason}</div>}
+                </Td>
+                <Td className="tabular-nums">{a.score !== null ? `${Math.round(a.score)}%` : "-"}</Td>
+                <Td className="text-subtle">{timeAgo(a.assigned_at)}</Td>
+                <Td className="text-right">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => openDialog({
+                      proposalId: a.proposal_id, student: a.student_name, title: a.title,
+                      currentSupervisorId: a.supervisor_id,
+                    })}
+                  >
+                    Change
+                  </Button>
+                </Td>
+              </tr>
+            ))}
+          </Table>
         </Card>
       )}
-      <Card>
-        <Table headers={["Student", "Proposal", "Supervisor", "How", "When", ""]}>
-          {rows.map((r) => (
-            <tr key={r.id} className="hover:bg-ink/[0.02]">
-              <Td className="font-medium">{r.student}</Td>
-              <Td className="max-w-[240px] truncate text-subtle">{r.title}</Td>
-              <Td>{r.supervisor}</Td>
-              <Td>
-                <Badge tone={r.method === "Merit allocation" ? "brand" : "warning"}>{r.method}</Badge>
-              </Td>
-              <Td className="text-subtle">{daysAgoLabel(r.daysAgo)}</Td>
-              <Td className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => open({ student: r.student, title: r.title, rowId: r.id, current: r.supervisor })}
-                >
-                  <Pencil className="h-3.5 w-3.5" />Change
-                </Button>
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      </Card>
+
       <Modal
         open={target !== null}
-        title={target?.current ? "Change supervisor" : "Assign supervisor"}
+        title={target?.currentSupervisorId ? "Change supervisor" : "Assign a supervisor"}
         onClose={() => setTarget(null)}
         footer={
           <>
             <Button variant="secondary" onClick={() => setTarget(null)}>Cancel</Button>
-            <Button type="submit" form="assign-form">Save assignment</Button>
+            <Button type="submit" form="assign-form" loading={busy} disabled={!supervisorId || !reason.trim()}>
+              Save
+            </Button>
           </>
-             }
+        }
       >
         {target && (
-          <form id="assign-form" className="space-y-4" onSubmit={save}>
+          <form id="assign-form" className="space-y-4" onSubmit={submit}>
             <div className="text-sm">
               <div className="font-medium">{target.student}</div>
               <div className="text-subtle">{target.title}</div>
             </div>
-            <Field label="Supervisor">
-              <Select value={choice} onChange={(e) => setChoice(e.target.value)} required>
-                <option value="">Select a supervisor...</option>
-                {supervisors
-                  .filter((s) => s.name !== target.current)
-                  .map((s) => (
-                    <option key={s.name} value={s.name} disabled={s.load >= s.capacity}>
-                      {s.name} ({s.designation}, {s.load}/{s.capacity}{s.load >= s.capacity ? ", full" : ""})
+            <Field label="Supervisor" hint="A supervisor who is at capacity cannot be chosen.">
+              <Select value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} required>
+                <option value="">Choose a supervisor</option>
+                {supervisors.map((s) => {
+                  const full = s.current_count >= s.capacity;
+                  const same = s.id === target.currentSupervisorId;
+                  return (
+                    <option key={s.id} value={s.id} disabled={full || same}>
+                      {s.user.full_name} · {s.designation.name} · {s.current_count}/{s.capacity}
+                      {full ? " · full" : ""}{same ? " · current" : ""}
                     </option>
-                  ))}
+                  );
+                })}
               </Select>
             </Field>
-            <Field label="Reason" hint="Recorded in the audit log.">
+            <Field label="Reason" hint="Required. It is recorded in the audit log.">
               <Textarea value={reason} onChange={(e) => setReason(e.target.value)} required />
             </Field>
           </form>

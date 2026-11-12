@@ -1,23 +1,25 @@
 "use client";
+
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, EyeOff, Loader2, Play, Shuffle, UserX, Users } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, CheckCircle2, EyeOff, Play, UserX, Users } from "lucide-react";
+
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/dialogs";
-import { DemoBadge } from "@/components/ui/DemoBadge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { StatCard } from "@/components/ui/StatCard";
 import { Table, Td } from "@/components/ui/Table";
 import { useToast } from "@/components/ui/Toast";
-import { apiGet, errorMessage } from "@/lib/apiClient";
-import { daysAgoLabel } from "@/lib/format";
-import { ALLOCATION_RESULT, PENDING_ALLOCATION, RUN_HISTORY } from "@/lib/mock/coordinatorDemo";
-import { Student, Supervisor } from "@/lib/types";
-type Phase = "idle" | "running" | "done";
+import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
+import { timeAgo } from "@/lib/format";
+import { AllocationReadiness, AllocationRun, AllocationRunSummary } from "@/lib/types";
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 function Check({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   const Icon = ok ? CheckCircle2 : AlertTriangle;
   return (
@@ -27,172 +29,217 @@ function Check({ ok, children }: { ok: boolean; children: React.ReactNode }) {
     </li>
   );
 }
+
 export default function AssignmentRunsPage() {
   const toast = useToast();
-  const [students, setStudents] = useState<Student[] | null>(null);
-  const [supervisors, setSupervisors] = useState<Supervisor[] | null>(null);
+  const [readiness, setReadiness] = useState<AllocationReadiness | null>(null);
+  const [runs, setRuns] = useState<AllocationRunSummary[] | null>(null);
+  const [shown, setShown] = useState<AllocationRun | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [phase, setPhase] = useState<Phase>("idle");
+  const [running, setRunning] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => {
-    Promise.all([
-      apiGet<Student[]>("/api/v1/students"),
-      apiGet<Supervisor[]>("/api/v1/supervisors"),
-    ])
-      .then(([s, sup]) => { setStudents(s); setSupervisors(sup); })
-      .catch((e) => setError(errorMessage(e)));
-    return () => clearTimeout(timer.current);
+
+  const openRun = useCallback(async (id: number) => {
+    try {
+      setShown(await apiGet<AllocationRun>(`/api/v1/allocation/runs/${id}`));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
   }, []);
-  function run() {
+
+  const load = useCallback(async () => {
+    try {
+      const [r, history] = await Promise.all([
+        apiGet<AllocationReadiness>("/api/v1/allocation/readiness"),
+        apiGet<AllocationRunSummary[]>("/api/v1/allocation/runs"),
+      ]);
+      setReadiness(r);
+      setRuns(history);
+      return history;
+    } catch (e) {
+      setError(errorMessage(e));
+      setRuns([]);
+      return [];
+    }
+  }, []);
+
+  useEffect(() => {
+    load().then((history) => { if (history.length > 0) openRun(history[0].id); });
+  }, [load, openRun]);
+
+  async function run() {
     setConfirming(false);
-    setPhase("running");
-    timer.current = setTimeout(() => {
-      setPhase("done");
-      toast.success("Allocation finished (demo result)");
-    }, 1800);
+    setRunning(true);
+    setError(null);
+    try {
+      const result = await apiPost<AllocationRun>("/api/v1/allocation/runs");
+      setShown(result);
+      toast.success(
+        `Allocation finished: ${result.matched_count} matched, ${result.unmatched_count} need a decision`,
+      );
+      await load();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setRunning(false);
+    }
   }
-  if (error) return <Alert>{error}</Alert>;
-  if (!students || !supervisors) return <Spinner className="mt-20 h-8 w-8" />;
-  const verified = students.filter((s) => s.cgpa_verified).length;
-  const unverified = students.length - verified;
-  const openSlots = supervisors.reduce((n, s) => n + (s.capacity - s.current_count), 0);
-  const { matched, unmatched } = ALLOCATION_RESULT;
+
   return (
     <>
       <PageHeader
         title="Assignment runs"
-        description="Match approved proposals to supervisors. You review the result and can override any assignment."
-        actions={
-          <Button onClick={() => setConfirming(true)} loading={phase === "running"}>
-            <Play className="h-4 w-4" />Run allocation
-          </Button>
-        }
+        description="Place waiting students with supervisors. You review every result and can change any assignment."
       />
-      <Card className="mb-6">
-        <CardHeader title="Before you run" description="Checked against your live data" />
-        <CardContent>
-          <ul className="space-y-3">
-            <Check ok={unverified === 0}>
-              {verified} of {students.length} student CGPAs verified.
-              {unverified > 0 && " Students with an unverified CGPA are left out of the run."}
-              {unverified > 0 && (
-                <>
-                  {" "}
-                  <Link href="/coordinator/students" className="font-medium text-brand hover:underline">
-                    Verify now
-                  </Link>
-                </>
-              )}
-            </Check>
-            <Check ok={openSlots > 0}>
-              {openSlots} open supervision slot{openSlots === 1 ? "" : "s"} across {supervisors.length} supervisor
-              {supervisors.length === 1 ? "" : "s"}.
-               </Check>
-            <Check ok>
-              {PENDING_ALLOCATION.length} approved proposals are waiting for a supervisor (sample data).
-            </Check>
-          </ul>
-        </CardContent>
-      </Card>
-      {phase === "running" && (
-        <Card className="mb-6">
-          <CardContent className="flex items-center gap-3 text-sm">
-            <Loader2 className="h-5 w-5 animate-spin text-brand" />
-            Running the allocation. Students are processed in order of verified CGPA...
+      {error && <Alert>{error}</Alert>}
+
+      <div
+        className={
+          "mb-6 flex items-start gap-2 rounded-lg border border-line bg-surface " +
+          "px-3 py-2.5 text-sm text-subtle"
+        }
+      >
+        <EyeOff className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          Students are served in order of verified CGPA, highest first. That order is never shown to anyone, and
+          results are listed alphabetically.
+        </div>
+      </div>
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader title="Before you run" description="Live checks from the database." />
+          <CardContent className="space-y-5">
+            {!readiness ? (
+              <Spinner className="mx-auto my-6 h-6 w-6" />
+            ) : (
+              <>
+                <ul className="space-y-3">
+                  <Check ok={readiness.waiting_verified > 0}>
+                    {plural(readiness.waiting_verified, "student")} waiting with a verified CGPA
+                  </Check>
+                  <Check ok={readiness.waiting_unverified === 0}>
+                    {readiness.waiting_unverified === 0 ? (
+                      "Every waiting student has a verified CGPA"
+                    ) : (
+                      <>
+                        {plural(readiness.waiting_unverified, "waiting student")} will be skipped because the CGPA is
+                        not verified.{" "}
+                        <Link href="/coordinator/students" className="font-medium text-brand hover:underline">
+                          Verify CGPAs
+                        </Link>
+                      </>
+                    )}
+                  </Check>
+                  <Check ok={readiness.open_slots > 0}>
+                    {plural(readiness.open_slots, "free supervision place")} with{" "}
+                    {plural(readiness.supervisors_with_slots, "supervisor")}
+                  </Check>
+                </ul>
+                <Button
+                  onClick={() => setConfirming(true)}
+                  loading={running}
+                  disabled={readiness.waiting_verified === 0}
+                >
+                  <Play className="h-4 w-4" />Run allocation
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
-      )}
-      {phase === "done" && (
-        <div className="mb-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-subtle">Latest result</h2>
-            <DemoBadge />
+
+        <Card>
+          <CardHeader title="Run history" />
+          {runs === null ? (
+            <Spinner className="mx-auto my-6 h-6 w-6" />
+          ) : runs.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-subtle">No runs yet.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {runs.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                  <div>
+                    <div className="font-medium">Run #{r.id}</div>
+                    <div className="text-xs text-subtle">
+                      {timeAgo(r.run_at)} · {r.matched_count} matched · {r.unmatched_count} open
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={shown?.id === r.id ? "primary" : "secondary"}
+                    onClick={() => openRun(r.id)}
+                  >
+                    View
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      {shown && (
+        <>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            <StatCard label="Students processed" value={shown.processed} icon={Users} tone="info" />
+            <StatCard label="Matched" value={shown.matched_count} icon={CheckCircle2} tone="success" />
+            <StatCard label="Need your decision" value={shown.unmatched_count} icon={UserX} tone="warning" />
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <StatCard label="Students processed" value={PENDING_ALLOCATION.length} icon={Users} tone="info" />
-            <StatCard label="Matched to a supervisor" value={matched.length} icon={Shuffle} tone="success" />
-            <StatCard label="Need manual assignment" value={unmatched.length} icon={UserX} tone="warning" />
-          </div>
-          <Card>
-            <CardHeader title="Matched" />
-            <Table headers={["Student", "Proposal", "Assigned supervisor", "AI match"]}>
-              {matched.map((m) => (
-                <tr key={m.student}>
-                  <Td className="font-medium">{m.student}</Td>
-                  <Td className="max-w-[260px] truncate text-subtle">{m.title}</Td>
-                  <Td>{m.supervisor}</Td>
-                  <Td><Badge tone="brand">{m.score}%</Badge></Td>
+
+          <Card className="mb-6">
+            <CardHeader
+              title={`Result of run #${shown.id}`}
+              description={`Started by ${shown.triggered_by_name}, ${timeAgo(shown.run_at)}.`}
+            />
+            <Table headers={["Student", "Proposal", "Assigned supervisor", "Match", "On their list"]}>
+              {shown.matched.map((m) => (
+                <tr key={m.proposal_id}>
+                  <Td className="font-medium">{m.student_name}</Td>
+                  <Td className="max-w-[260px] truncate">{m.title}</Td>
+                  <Td>{m.supervisor_name}</Td>
+                  <Td className="tabular-nums">{Math.round(m.score)}%</Td>
+                  <Td>
+                    {m.choice === 1 ? <Badge tone="success">Best match</Badge> : <Badge>#{m.choice} match</Badge>}
+                  </Td>
                 </tr>
               ))}
             </Table>
           </Card>
-          {unmatched.length > 0 && (
-            <Card className="border-warning/30">
+
+          {shown.unmatched.length > 0 && (
+            <Card className="mb-6">
               <CardHeader
-                title="Needs your decision"
-                description="No supervisor with free capacity fit these students."
+                title="Students who need your decision"
+                description="Not forced onto a poor match. Choose a supervisor for them yourself."
+                action={<Link href="/coordinator/assignments"><Button size="sm">Assign manually</Button></Link>}
               />
-              <ul className="divide-y divide-line">
-                {unmatched.map((u) => (
-                  <li key={u.student} className="flex flex-wrap items-center gap-3 px-5 py-4 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-medium">{u.student}</div>
-                      <div className="truncate text-subtle">{u.title}</div>
-                      <div className="mt-1 text-xs text-warning">{u.reason}</div>
-                    </div>
-                    <Link href="/coordinator/assignments"><Button size="sm">Assign manually</Button></Link>
-                  </li>
+              <Table headers={["Student", "Proposal", "Why"]}>
+                {shown.unmatched.map((u) => (
+                  <tr key={u.proposal_id}>
+                    <Td className="font-medium">{u.student_name}</Td>
+                    <Td className="max-w-[260px] truncate">{u.title}</Td>
+                    <Td className="text-subtle">{u.message}</Td>
+                  </tr>
                 ))}
-              </ul>
+              </Table>
             </Card>
           )}
-        </div>
+
+          {shown.skipped_unverified.length > 0 && (
+            <p className="text-sm text-subtle">
+              Skipped because their CGPA is not verified: {shown.skipped_unverified.join(", ")}.
+            </p>
+          )}
+        </>
       )}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader title="Run history" action={<DemoBadge />} />
-          <Table headers={["Run", "When", "Matched", "Needed manual", "Status"]}>
-            {RUN_HISTORY.map((r) => (
-              <tr key={r.id}>
-                <Td className="font-medium">#{r.id}</Td>
-                <Td className="text-subtle">{daysAgoLabel(r.daysAgo)}</Td>
-                <Td>{r.matched}</Td>
-                <Td>{r.unmatched}</Td>
-                <Td>
-                  <Badge tone={r.unmatched > 0 ? "warning" : "success"}>{r.status}</Badge>
-                </Td>
-              </tr>
-            ))}
-          </Table>
-        </Card>
-        <Card className="h-fit">
-            <CardHeader title="How it works" />
-          <CardContent className="space-y-3 text-sm text-subtle">
-            <p>
-              Students are processed in order of verified CGPA, highest first. Each student is placed with the
-              best-matched supervisor from their own AI recommendation list who still has capacity.
-            </p>
-            <p className="flex gap-2">
-              <EyeOff className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                The CGPA order and any ranking stay inside the allocation service. They are never shown here
-                or to anyone else.
-              </span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+
       <ConfirmDialog
         open={confirming}
         title="Run the allocation?"
-        message={
-          `${PENDING_ALLOCATION.length} students waiting for a supervisor will be matched. ` +
-          "You can review and override every result afterwards."
-        }
+        message="Every waiting student with a verified CGPA will be placed with the best available supervisor. You can change any assignment afterwards."
         confirmLabel="Run allocation"
-        onCancel={() => setConfirming(false)}
         onConfirm={run}
+        onCancel={() => setConfirming(false)}
       />
     </>
   );
