@@ -22,7 +22,7 @@ class SheetData:
     department_line: str  # for example "Department of Computer Science and Engineering"
     university: str
     title_line: str  # for example "CSE 3200: Weekly Progress Report (Summary)"
-        students: list[tuple[str, str]]  # (name, student id)
+    students: list[tuple[str, str]]  # (name, student id)
     section_a: str
     section_b: str
     next_works: list[str] = field(default_factory=list)
