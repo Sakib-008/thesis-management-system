@@ -7,6 +7,7 @@ from app.api.v1 import (
     allocation, audit, auth, duplicates, health, meetings, proposals, recommendations, reference, reports, students,
     supervisors, users,
 )
+from app.api.v1 import documents, milestones
 app = FastAPI(title="AI-Assisted University Thesis Management System", version="0.8.0")
 app.add_middleware(
     CORSMiddleware,
@@ -39,3 +40,5 @@ app.include_router(meetings.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 # Alias so the frontend landing page can probe /health directly
 app.include_router(health.router)
+app.include_router(milestones.router, prefix="/api/v1")
+app.include_router(documents.router, prefix="/api/v1")
