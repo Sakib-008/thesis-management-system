@@ -1,3 +1,4 @@
+
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -18,7 +19,9 @@ export default function StudentProfilePage() {
   const [departments, setDepartments] = useState<NamedRef[]>([]);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [student, setStudent] = useState<Student | null>(null);
-  const [form, setForm] = useState({ department_id: "", program_id: "", batch: "", cgpa: "" });
+  const [form, setForm] = useState({
+    department_id: "", program_id: "", batch: "", cgpa: "", student_number: "",
+  });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
@@ -30,6 +33,7 @@ export default function StudentProfilePage() {
       program_id: String(s.program.id),
       batch: s.batch,
       cgpa: String(s.cgpa),
+      student_number: s.student_number ?? "",
     });
   }
 
@@ -64,6 +68,7 @@ export default function StudentProfilePage() {
         program_id: Number(form.program_id),
         batch: form.batch,
         cgpa: Number(form.cgpa),
+        student_number: form.student_number,
       });
       fill(result);
       toast.success("Profile saved");
@@ -104,6 +109,14 @@ export default function StudentProfilePage() {
               </Field>
               <Field label="Batch" hint="For example 2022">
                 <Input value={form.batch} onChange={(e) => setForm({ ...form, batch: e.target.value })} required maxLength={20} />
+              </Field>
+              <Field label="Student ID" hint="Your university ID. It is printed on your weekly reports.">
+                <Input
+                  value={form.student_number}
+                  onChange={(e) => setForm({ ...form, student_number: e.target.value })}
+                  maxLength={30}
+                  placeholder="For example 2207001"
+                />
               </Field>
               <Field label="CGPA" hint="Between 0.00 and 4.00">
                 <Input type="number" step="0.01" min={0} max={4} value={form.cgpa}
