@@ -292,3 +292,102 @@ export interface ReportSettings {
   sheet_title: string;
   due_days: number;
 }
+
+export type MilestoneStatusValue =
+  | "not_started"
+  | "in_progress"
+  | "submitted"
+  | "under_review"
+  | "revision_required"
+  | "completed";
+
+export type DocumentTypeValue = "report" | "slides" | "literature" | "data" | "code" | "other";
+
+export interface Milestone {
+  id: number;
+  thesis_id: number;
+  student_names: string[];
+  title: string;
+  description: string;
+  start_date: string | null;
+  deadline: string;
+  status: MilestoneStatusValue;
+  overdue: boolean;
+  days_left: number | null;
+  submissions_count: number;
+  open_feedback_count: number;
+  latest_submission_id: number | null;
+  created_at: string;
+}
+
+export interface FeedbackEntry {
+  id: number;
+  submission_id: number;
+  milestone_id: number;
+  milestone_title: string;
+  student_names: string[];
+  given_by_name: string;
+  content: string;
+  status: "open" | "resolved";
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export interface FileInfo {
+  original_name: string;
+  size_bytes: number;
+  content_type: string;
+}
+
+export interface MilestoneSubmission {
+  id: number;
+  milestone_id: number;
+  milestone_title: string;
+  student_names: string[];
+  submitted_by_name: string;
+  note: string;
+  file: FileInfo | null;
+  status: "submitted" | "revision_required" | "completed";
+  submitted_at: string;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  feedback: FeedbackEntry[];
+}
+
+export interface ThesisProgress {
+  thesis_id: number;
+  proposal_id: number | null;
+  title: string;
+  student_names: string[];
+  supervisor_name: string | null;
+  total: number;
+  completed: number;
+  in_review: number;
+  revision_required: number;
+  overdue: number;
+  percent: number;
+  next_deadline: string | null;
+}
+
+export interface DocumentVersionItem {
+  id: number;
+  version_no: number;
+  original_name: string;
+  size_bytes: number;
+  content_type: string;
+  uploaded_by_name: string | null;
+  uploaded_at: string;
+  note: string;
+}
+
+export interface ThesisDocument {
+  id: number;
+  thesis_id: number;
+  student_names: string[];
+  title: string;
+  type: DocumentTypeValue;
+  uploaded_by_name: string;
+  created_at: string;
+  version_count: number;
+  latest: DocumentVersionItem | null;
+}

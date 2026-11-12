@@ -1,87 +1,182 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { FormEvent, useCallback, useEffect, useState } from "react";
+import { ArrowLeft, Send } from "lucide-react";
+import { DownloadButton } from "@/components/supervision/DownloadButton";
+import { FeedbackNotes } from "@/components/supervision/FeedbackNotes";
+import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { DemoBanner } from "@/components/ui/DemoBanner";
 import { FilePicker } from "@/components/ui/FilePicker";
 import { Field, Textarea } from "@/components/ui/Form";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { Spinner } from "@/components/ui/Spinner";
+import { StatusTimeline } from "@/components/ui/StatusTimeline";
 import { useToast } from "@/components/ui/Toast";
-import { daysAgoLabel, dueLabel } from "@/lib/format";
-import { STATUS_TONE } from "@/lib/mock/shared";
-import { MILESTONE_SUBMISSIONS, MILESTONES } from "@/lib/mock/thesisDemo";
+import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
+import { timeAgo } from "@/lib/format";
+import {
+  ACCEPT_FILES, MILESTONE_LABEL, MILESTONE_TONE, dueText, formatDay, isOpenForWork,
+} from "@/lib/supervisionUi";
+import { apiUpload } from "@/lib/upload";
+import { Milestone, MilestoneStatusValue, MilestoneSubmission } from "@/lib/types";
 
-export default function SubmitMilestonePage() {
+const STEPS = ["Planned", "Handed in", "Reviewed", "Completed"];
+
+const SUBMISSION_LABEL = { submitted: "Waiting", revision_required: "Changes requested", completed: "Approved" };
+const SUBMISSION_TONE = { submitted: "info", revision_required: "warning", completed: "success" } as const;
+
+function stepOf(status: MilestoneStatusValue): number {
+  if (status === "completed") return STEPS.length;
+  if (status === "submitted" || status === "under_review") return 1;
+  if (status === "revision_required") return 2;
+  return 0;
+}
+
+export default function SubmitWorkPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const toast = useToast();
-  const milestone = MILESTONES.find((m) => String(m.id) === params.id) ?? MILESTONES[0];
-  const history = MILESTONE_SUBMISSIONS[milestone.id] ?? [];
-  const [file, setFile] = useState<File | null>(null);
+  const [milestone, setMilestone] = useState<Milestone | null>(null);
+  const [history, setHistory] = useState<MilestoneSubmission[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [pickerKey, setPickerKey] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const base = `/api/v1/milestones/${params.id}`;
 
-  function submit(e: FormEvent) {
+  const load = useCallback(async () => {
+    try {
+      setMilestone(await apiGet<Milestone>(base));
+      setHistory(await apiGet<MilestoneSubmission[]>(`${base}/submissions`));
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }, [base]);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    toast.success(`Work submitted for "${milestone.title}" (demo: not saved yet)`);
-    router.push("/student/milestones");
+    const form = new FormData();
+    form.append("note", note);
+    if (file) form.append("file", file);
+    setBusy(true);
+    try {
+      await apiUpload(`${base}/submissions`, form);
+      toast.success("Work handed in. Your supervisor will review it.");
+      setNote("");
+      setFile(null);
+      setPickerKey((k) => k + 1);
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
   }
+
+  async function resolve(id: number) {
+    try {
+      await apiPost(`/api/v1/feedback/${id}/resolve`);
+      await load();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  }
+
+  if (error) return <Alert>{error}</Alert>;
+  if (!milestone) return <Spinner className="mt-20 h-8 w-8" />;
+
+  const open = isOpenForWork(milestone.status);
 
   return (
     <>
-      <PageHeader title={milestone.title} description="Submit your work for this milestone." />
-      <DemoBanner />
+      <PageHeader
+        title={milestone.title}
+        description={milestone.description || "Hand in your work for this milestone."}
+        actions={
+          <>
+            <Badge tone={MILESTONE_TONE[milestone.status]}>{MILESTONE_LABEL[milestone.status]}</Badge>
+            <Link href="/student/milestones">
+              <Button variant="secondary" size="sm"><ArrowLeft className="h-4 w-4" />All milestones</Button>
+            </Link>
+          </>
+        }
+      />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader title="About this milestone" />
-            <CardContent className="space-y-3 text-sm">
-              <Badge tone={STATUS_TONE[milestone.status]}>{milestone.status}</Badge>
-              <p className="text-subtle">{milestone.description}</p>
-              <p className="font-medium">{milestone.status === "Completed" ? "Finished" : dueLabel(milestone.daysLeft)}</p>
-            </CardContent>
-          </Card>
+      <Card className="mb-6">
+        <CardContent>
+          <StatusTimeline
+            steps={STEPS}
+            current={stepOf(milestone.status)}
+            warning={milestone.status === "revision_required"}
+          />
+          <p className="mt-4 text-center text-sm text-subtle">
+            {dueText(milestone)} · deadline {formatDay(milestone.deadline)}
+          </p>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader title="Previous submissions" />
-            {history.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-subtle">Nothing submitted yet.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {history.map((h) => (
-                  <li key={h.version} className="px-5 py-3.5 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Version {h.version}</span>
-                      <Badge tone={h.status === "Approved" ? "success" : h.status === "Under review" ? "info" : "warning"}>{h.status}</Badge>
-                    </div>
-                    <p className="mt-1 text-subtle">{h.note}</p>
-                    <p className="text-xs text-subtle">{daysAgoLabel(h.daysAgo)}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+      <div className="grid gap-6 lg:grid-cols-5">
+        <div className="space-y-6 lg:col-span-2">
+          {open ? (
+            <Card>
+              <CardHeader
+                title={milestone.status === "revision_required" ? "Hand in the revised work" : "Hand in your work"}
+                description="A note, a file, or both. Files up to 20 MB."
+              />
+              <CardContent>
+                <form className="space-y-4" onSubmit={submit}>
+                  <Field label="Note for your supervisor" hint="What you did, and anything you want feedback on.">
+                    <Textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={4000} />
+                  </Field>
+                  <div className="space-y-1.5">
+                    <div className="text-sm font-medium">File (optional)</div>
+                    <FilePicker key={pickerKey} accept={ACCEPT_FILES} onChange={setFile} />
+                    <p className="text-xs text-subtle">PDF, Word, PowerPoint, Excel, zip, images or text.</p>
+                  </div>
+                  <Button type="submit" loading={busy} disabled={!note.trim() && !file}>
+                    <Send className="h-4 w-4" />Submit work
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          ) : (
+            <Alert>
+              {milestone.status === "completed"
+                ? "This milestone is completed."
+                : "Your work is waiting for your supervisor's review."}
+            </Alert>
+          )}
         </div>
 
-        <Card className="h-fit lg:col-span-2">
-          <CardHeader title="New submission" description="Upload a new version. Your supervisor is notified when you submit." />
-          <CardContent>
-            <form className="space-y-5" onSubmit={submit}>
-              <div>
-                <div className="mb-1.5 text-sm font-medium">Document</div>
-                <FilePicker accept=".pdf,.doc,.docx" onChange={setFile} />
-                <p className="mt-1.5 text-xs text-subtle">PDF or Word document.</p>
-              </div>
-              <Field label="Notes for your supervisor" hint="What changed since the last version?">
-                <Textarea value={note} onChange={(e) => setNote(e.target.value)} />
-              </Field>
-              <Button type="submit" disabled={!file}>Submit work</Button>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="space-y-4 lg:col-span-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-subtle">Your submissions</h2>
+          {history.length === 0 && <p className="text-sm text-subtle">Nothing handed in yet.</p>}
+          {history.map((s) => (
+            <Card key={s.id}>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs text-subtle">{timeAgo(s.submitted_at)}</span>
+                  <Badge tone={SUBMISSION_TONE[s.status]}>{SUBMISSION_LABEL[s.status]}</Badge>
+                </div>
+                {s.note && <p className="whitespace-pre-line">{s.note}</p>}
+                {s.file && (
+                  <DownloadButton
+                    path={`/api/v1/submissions/${s.id}/download`}
+                    filename={s.file.original_name}
+                    size={s.file.size_bytes}
+                  />
+                )}
+                <FeedbackNotes items={s.feedback} onResolve={resolve} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
     </>
   );

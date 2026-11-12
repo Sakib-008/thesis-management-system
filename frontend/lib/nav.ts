@@ -47,6 +47,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/supervisor/proposals", label: "Proposals", icon: FileText },
         { href: "/supervisor/students", label: "My students", icon: Users },
         { href: "/supervisor/milestones", label: "Milestones", icon: ListChecks },
+                { href: "/supervisor/documents", label: "Documents", icon: FolderOpen },
         { href: "/supervisor/meetings", label: "Meetings", icon: CalendarClock },
         { href: "/supervisor/reports", label: "Weekly reports", icon: FileSignature },
         { href: "/supervisor/evaluations", label: "Evaluations", icon: FileCheck },
