@@ -9,3 +9,4 @@ from app.models.thesis import (  # noqa: F401
 from app.models.allocation import AssignmentRun, AssignmentRunStatus  # noqa: F401
 from app.models.ai import SupervisorRecommendation, SystemSetting, TextEmbedding  # noqa: F401
 from app.models.duplicates import ProposalSimilarity  # noqa: F401
+from app.models.meetings import Meeting, WeeklyReport  # noqa: F401
