@@ -74,7 +74,7 @@ def list_for(db: Session, user: User, status: str | None = None) -> list[Meeting
         if thesis_id is None:
             return []
         stmt = stmt.where(Meeting.thesis_id == thesis_id)
-        elif user.role == UserRole.supervisor:
+    elif user.role == UserRole.supervisor:
         stmt = (
             stmt.join(ThesisProposal, ThesisProposal.thesis_id == Meeting.thesis_id)
             .join(SupervisorAssignment, SupervisorAssignment.proposal_id == ThesisProposal.id)

@@ -24,7 +24,7 @@ class Meeting(Base):
     requested_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     decline_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-        updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     thesis: Mapped[Thesis] = relationship()
 class WeeklyReport(Base):
     """The student's summary report after a meeting, in the format of the CSE 3200 progress sheet.
