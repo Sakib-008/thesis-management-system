@@ -288,7 +288,7 @@ export interface ReportOverviewRow {
 }
 export interface ReportSettings {
   university_name: string;
-  course_code: string;
+  course_number: string;
   sheet_title: string;
   due_days: number;
 }

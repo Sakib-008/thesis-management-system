@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
@@ -8,19 +9,23 @@ import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiPut, errorMessage } from "@/lib/apiClient";
 import { ReportSettings } from "@/lib/types";
+
 export function ReportSettingsCard() {
   const toast = useToast();
   const [cfg, setCfg] = useState<ReportSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
   useEffect(() => {
     apiGet<ReportSettings>("/api/v1/settings/reports")
       .then(setCfg)
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
+
   const valid =
-    cfg !== null && cfg.university_name.trim().length >= 2 && cfg.course_code.trim().length >= 1 &&
+    cfg !== null && cfg.university_name.trim().length >= 2 && cfg.course_number.trim().length >= 1 &&
     cfg.sheet_title.trim().length >= 2 && cfg.due_days >= 1 && cfg.due_days <= 60;
+
   async function save() {
     if (!cfg) return;
     setSaving(true);
@@ -30,9 +35,10 @@ export function ReportSettingsCard() {
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
-              setSaving(false);
+      setSaving(false);
     }
   }
+
   return (
     <Card className="h-fit">
       <CardHeader
@@ -51,11 +57,11 @@ export function ReportSettingsCard() {
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Course code" hint="For example CSE 3200.">
+            <Field label="Course number" hint="For example 3200. The department code is added for you.">
               <Input
-                value={cfg.course_code}
-                maxLength={30}
-                onChange={(e) => setCfg({ ...cfg, course_code: e.target.value })}
+                value={cfg.course_number}
+                maxLength={20}
+                onChange={(e) => setCfg({ ...cfg, course_number: e.target.value })}
               />
             </Field>
             <Field label="Days to write a report" hint="After the meeting is recorded.">
@@ -68,7 +74,7 @@ export function ReportSettingsCard() {
               />
             </Field>
           </div>
-          <Field label="Sheet title" hint="Printed after the course code.">
+          <Field label="Sheet title" hint="Printed after the course code, for example CSE 3200.">
             <Input
               value={cfg.sheet_title}
               maxLength={120}
@@ -76,7 +82,8 @@ export function ReportSettingsCard() {
             />
           </Field>
           <p className="text-xs text-subtle">
-            The department name on each sheet comes from the student's department.
+            The department name and its code (such as CSE) on each sheet come from the student's department.
+            Computer Science and Engineering becomes CSE, so the heading reads CSE {cfg.course_number}.
           </p>
           <div className="flex justify-end border-t border-line pt-4">
             <Button size="sm" loading={saving} disabled={!valid} onClick={save}>Save settings</Button>
