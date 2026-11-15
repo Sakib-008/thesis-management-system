@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { DemoBadge } from "@/components/ui/DemoBadge";
 import { DuplicateSettingsCard } from "@/components/duplicates/DuplicateSettingsCard";
+import { CriteriaCard } from "@/components/evaluation/CriteriaCard";
+import { GradingCard } from "@/components/evaluation/GradingCard";
 import { ReportSettingsCard } from "@/components/reports/ReportSettingsCard";
 import { Field, Input, Select } from "@/components/ui/Form";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -15,7 +16,6 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiPut, errorMessage } from "@/lib/apiClient";
-import { EVALUATION } from "@/lib/mock/thesisDemo";
 import { RecommendationSettings } from "@/lib/types";
 
 const DEFAULTS: RecommendationSettings = {
@@ -39,16 +39,11 @@ const WEIGHT_FIELDS: { key: WeightKey; label: string; hint: string }[] = [
   { key: "weight_availability", label: "Availability", hint: "Free supervision capacity" },
 ];
 
-interface Criterion { id: number; name: string; max: number }
-
 export default function SettingsPage() {
   const toast = useToast();
   const [cfg, setCfg] = useState<RecommendationSettings | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [criteria, setCriteria] = useState<Criterion[]>(
-    EVALUATION.criteria.map((c, i) => ({ id: i, name: c.name, max: c.max })),
-  );
 
   useEffect(() => {
     apiGet<RecommendationSettings>("/api/v1/settings/recommendation")
@@ -56,15 +51,9 @@ export default function SettingsPage() {
       .catch((e) => setLoadError(errorMessage(e)));
   }, []);
 
-  const criteriaTotal = criteria.reduce((sum, c) => sum + c.max, 0);
-
   function setNumber(key: keyof RecommendationSettings, raw: string, whole: boolean) {
     const n = Number(raw) || 0;
     setCfg((c) => (c ? { ...c, [key]: whole ? Math.max(0, Math.round(n)) : n } : c));
-  }
-
-  function updateCriterion(id: number, change: Partial<Criterion>) {
-    setCriteria((list) => list.map((c) => (c.id === id ? { ...c, ...change } : c)));
   }
 
   async function save() {
@@ -181,65 +170,8 @@ export default function SettingsPage() {
           )}
         </Card>
 
-        <Card className="h-fit">
-          <CardHeader
-            title="Evaluation criteria"
-            description="What a thesis is graded on. Marks must add up to 100. Preview only: not saved yet."
-            action={<DemoBadge />}
-          />
-          <CardContent className="space-y-3">
-            {criteria.map((c) => (
-              <div key={c.id} className="flex items-center gap-2">
-                <Input
-                  value={c.name}
-                  onChange={(e) => updateCriterion(c.id, { name: e.target.value })}
-                  aria-label="Criterion name"
-                />
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  className="w-20"
-                  value={c.max}
-                  onChange={(e) => updateCriterion(c.id, { max: Math.max(0, Number(e.target.value) || 0) })}
-                  aria-label="Maximum marks"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-8 px-0 text-danger hover:bg-danger/10"
-                  aria-label="Remove criterion"
-                  onClick={() => setCriteria((list) => list.filter((x) => x.id !== c.id))}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setCriteria((list) => [...list, { id: Date.now(), name: "", max: 0 }])}
-            >
-              <Plus className="h-4 w-4" />Add criterion
-            </Button>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-              <div className="flex items-center gap-2 text-sm">
-                Total marks
-                <Badge tone={criteriaTotal === 100 ? "success" : "danger"}>{criteriaTotal}</Badge>
-                {criteriaTotal !== 100 && <span className="text-xs text-danger">Must be exactly 100</span>}
-              </div>
-              <Button
-                size="sm"
-                disabled={criteriaTotal !== 100 || criteria.some((c) => !c.name.trim())}
-                onClick={() => toast.success("Criteria saved (demo: not saved yet)")}
-              >
-                Save criteria
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <CriteriaCard />
+        <GradingCard />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">

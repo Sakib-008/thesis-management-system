@@ -391,3 +391,124 @@ export interface ThesisDocument {
   version_count: number;
   latest: DocumentVersionItem | null;
 }
+
+export interface EvaluationCriterion {
+  id: number;
+  name: string;
+  description: string;
+  weight: number;
+  is_active: boolean;
+}
+
+export interface CriteriaSet {
+  criteria: EvaluationCriterion[];
+  active_total: number;
+  valid: boolean;
+}
+
+export interface GradeBand {
+  min: number;
+  grade: string;
+}
+
+export interface ScoreEntry {
+  criterion_id: number;
+  name: string;
+  weight: number;
+  score: number | null;
+}
+
+export interface EvaluationEntry {
+  id: number | null;
+  evaluator_name: string;
+  evaluator_role: string;
+  status: "none" | "draft" | "final";
+  scores: ScoreEntry[];
+  comment: string;
+  total: number;
+  grade: string;
+  submitted_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ResultCriterionRow {
+  name: string;
+  weight: number;
+  average: number;
+}
+
+export interface ThesisResultView {
+  published: boolean;
+  total: number | null;
+  grade: string | null;
+  evaluators_count: number;
+  criteria: ResultCriterionRow[];
+  comments: { evaluator_name: string; comment: string }[];
+  published_at: string | null;
+}
+
+export interface EvaluationListRow {
+  thesis_id: number;
+  proposal_id: number;
+  title: string;
+  student_names: string[];
+  supervisor_name: string | null;
+  my_status: "none" | "draft" | "final";
+  finals: number;
+  drafts: number;
+  average: number | null;
+  grade: string | null;
+  published: boolean;
+}
+
+export interface EvaluationDetailView {
+  thesis_id: number;
+  proposal_id: number;
+  title: string;
+  student_names: string[];
+  supervisor_name: string | null;
+  criteria: EvaluationCriterion[];
+  criteria_valid: boolean;
+  bands: GradeBand[];
+  mine: EvaluationEntry;
+  others: EvaluationEntry[];
+  result: ThesisResultView;
+  can_publish: boolean;
+  blocked_reason: string | null;
+}
+
+export interface NotificationItem {
+  id: number;
+  type: string;
+  text: string;
+  href: string | null;
+  actor_name: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export interface CoordinatorDashboardStats {
+  students_total: number;
+  cgpa_pending: number;
+  supervisors_total: number;
+  open_slots: number;
+  proposals_pending: number;
+  awaiting_assignment: number;
+  active_theses: number;
+  overdue_theses: number;
+  proposals_by_field: [string, number][];
+  completions_by_month: [string, number][];
+  workload_by_supervisor: [string, number, number][];
+}
+
+export interface ReportStats {
+  avg_completion_days: number | null;
+  completion_rate: number;
+  active_theses: number;
+  overdue_theses: number;
+  completions_by_month: [string, number][];
+  assignment_method: [string, number][];
+  theses_by_department: [string, number][];
+  theses_by_field: [string, number][];
+  theses_by_status: [string, number][];
+}
