@@ -8,6 +8,7 @@ from app.api.v1 import (
     supervisors, users,
 )
 from app.api.v1 import documents, milestones
+from app.api.v1 import evaluation
 app = FastAPI(title="AI-Assisted University Thesis Management System", version="0.8.0")
 app.add_middleware(
     CORSMiddleware,
@@ -42,3 +43,4 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(health.router)
 app.include_router(milestones.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
+app.include_router(evaluation.router, prefix="/api/v1")

@@ -63,6 +63,7 @@ export const NAV: Record<Role, NavGroup[]> = {
         { href: "/coordinator/assignment-runs", label: "Assignment runs", icon: Shuffle },
         { href: "/coordinator/assignments", label: "Assignments", icon: UserCheck },
         { href: "/coordinator/weekly-reports", label: "Progress reports", icon: ClipboardList },
+        { href: "/coordinator/evaluations", label: "Evaluations", icon: Award },
       ],
     },
     {
