@@ -23,7 +23,7 @@ export default function Topbar({ user, onMenu }: { user: User; onMenu: () => voi
       <div className="font-medium">{pageTitle(user.role, pathname)}</div>
 
       <div className="ml-auto flex items-center gap-2">
-        <NotificationBell role={user.role} />
+        <NotificationBell />
         <ThemeToggle />
         <div className="hidden text-right leading-tight sm:block">
           <div className="text-sm font-medium">{user.full_name}</div>
