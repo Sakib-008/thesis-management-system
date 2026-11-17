@@ -14,3 +14,4 @@ from app.models.supervision import (  # noqa: F401
     Document, DocumentVersion, Feedback, Milestone, MilestoneStatus, MilestoneSubmission,
 )
 from app.models.evaluation import Evaluation, EvaluationCriterion, ThesisResult  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
