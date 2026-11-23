@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { Table, Td } from "@/components/ui/Table";
-import { formatScore } from "@/lib/evaluationUi";
+import { formatScore, groupRows } from "@/lib/evaluationUi";
 import { formatDay } from "@/lib/supervisionUi";
 import { ThesisResultView } from "@/lib/types";
 
@@ -47,16 +47,30 @@ export function ResultPanel({ result }: { result: ThesisResultView }) {
         </Card>
       </div>
       <Card className="mt-6">
-        <CardHeader title="Score breakdown" description="The average mark for each criterion, out of 100" />
-        <Table headers={["Criterion", "Weight", "Average", ""]}>
-          {result.criteria.map((c) => (
-            <tr key={c.name}>
-              <Td className="font-medium">{c.name}</Td>
-              <Td className="tabular-nums text-subtle">{formatScore(c.weight)}%</Td>
-              <Td className="tabular-nums">{formatScore(c.average)}</Td>
-              <Td className="w-1/3"><ProgressBar value={c.average} max={100} /></Td>
-            </tr>
-          ))}
+        <CardHeader title="Score breakdown" description="The average marks for each course outcome, grouped like the defense sheet" />
+        <Table headers={["Outcome", "Marks", "Out of", ""]}>
+          {groupRows(result.criteria).flatMap((g) => {
+            const sub = result.groups.find((x) => x.category === g.category);
+            return [
+              <tr key={`g-${g.category}`} className="bg-ink/5">
+                <Td className="font-semibold">{g.category}</Td>
+                <Td className="tabular-nums font-semibold">{formatScore(sub?.marks ?? 0)}</Td>
+                <Td className="tabular-nums text-subtle">{formatScore(sub?.max ?? 0)}</Td>
+                <Td>{""}</Td>
+              </tr>,
+              ...g.rows.map((c) => (
+                <tr key={c.code || c.name}>
+                  <Td className="font-medium">
+                    {c.code && <span className="mr-2 text-xs font-semibold text-brand">{c.code}</span>}
+                    {c.name}
+                  </Td>
+                  <Td className="tabular-nums">{formatScore(c.average)}</Td>
+                  <Td className="tabular-nums text-subtle">{formatScore(c.weight)}</Td>
+                  <Td className="w-1/3"><ProgressBar value={c.average} max={c.weight} /></Td>
+                </tr>
+              )),
+            ];
+          })}
         </Table>
       </Card>
     </>

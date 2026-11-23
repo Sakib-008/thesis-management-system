@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/Card";
 import { Table, Td } from "@/components/ui/Table";
-import { EVALUATION_LABEL, EVALUATION_TONE, formatScore } from "@/lib/evaluationUi";
+import { EVALUATION_LABEL, EVALUATION_TONE, formatScore, groupRows } from "@/lib/evaluationUi";
 import { EvaluationEntry } from "@/lib/types";
 
 // One evaluator's marks, read only: the scores, the total, the grade and the comment.
@@ -19,14 +19,27 @@ export function EvaluationSummary({ entry, actions }: { entry: EvaluationEntry; 
           </div>
         }
       />
-      <Table headers={["Criterion", "Weight", "Score"]}>
-        {entry.scores.map((s) => (
-          <tr key={s.criterion_id}>
-            <Td className="font-medium">{s.name}</Td>
-            <Td className="tabular-nums text-subtle">{formatScore(s.weight)}%</Td>
-            <Td className="tabular-nums">{s.score === null ? "-" : formatScore(s.score)}</Td>
-          </tr>
-        ))}
+      <Table headers={["Outcome", "Marks", "Out of"]}>
+        {groupRows(entry.scores).flatMap((g) => {
+          const sub = entry.groups.find((x) => x.category === g.category);
+          return [
+            <tr key={`g-${g.category}`} className="bg-ink/5">
+              <Td className="font-semibold">{g.category}</Td>
+              <Td className="tabular-nums font-semibold">{formatScore(sub?.marks ?? 0)}</Td>
+              <Td className="tabular-nums text-subtle">{formatScore(sub?.max ?? 0)}</Td>
+            </tr>,
+            ...g.rows.map((s) => (
+              <tr key={s.criterion_id}>
+                <Td className="font-medium">
+                  {s.code && <span className="mr-2 text-xs font-semibold text-brand">{s.code}</span>}
+                  {s.name}
+                </Td>
+                <Td className="tabular-nums">{s.score === null ? "-" : formatScore(s.score)}</Td>
+                <Td className="tabular-nums text-subtle">{formatScore(s.weight)}</Td>
+              </tr>
+            )),
+          ];
+        })}
       </Table>
       <CardContent className="space-y-2 border-t border-line text-sm">
         <div className="flex items-center gap-3">

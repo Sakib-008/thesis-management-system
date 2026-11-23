@@ -25,7 +25,7 @@ export default function SupervisorEvaluationsPage() {
     <>
       <PageHeader
         title="Evaluations"
-        description="Mark the theses of your students. The coordinator publishes the result."
+        description="Mark each of your students. The coordinator publishes the result for each student."
       />
       {error && <Alert>{error}</Alert>}
       <Card>
@@ -35,8 +35,11 @@ export default function SupervisorEvaluationsPage() {
           emptyText={rows !== null && rows.length === 0 ? "You have no students to evaluate yet." : undefined}
         >
           {(rows ?? []).map((r) => (
-            <tr key={r.thesis_id}>
-              <Td className="font-medium">{r.student_names.join(", ")}</Td>
+            <tr key={`${r.thesis_id}-${r.student_id}`}>
+              <Td>
+                <div className="font-medium">{r.student_name}</div>
+                {r.student_number && <div className="text-xs text-subtle">{r.student_number}</div>}
+              </Td>
               <Td className="max-w-[320px] truncate text-subtle">{r.title}</Td>
               <Td><Badge tone={EVALUATION_TONE[r.my_status]}>{EVALUATION_LABEL[r.my_status]}</Badge></Td>
               <Td>
@@ -47,7 +50,7 @@ export default function SupervisorEvaluationsPage() {
                 )}
               </Td>
               <Td className="text-right">
-                <Link href={`/supervisor/evaluations/${r.thesis_id}`}>
+                <Link href={`/supervisor/evaluations/${r.thesis_id}?student=${r.student_id}`}>
                   <Button size="sm" variant={r.my_status === "final" ? "secondary" : "primary"}>
                     {r.my_status === "none" ? "Evaluate" : r.my_status === "draft" ? "Continue" : "View"}
                   </Button>

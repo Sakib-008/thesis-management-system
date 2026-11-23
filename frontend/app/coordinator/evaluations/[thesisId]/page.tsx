@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, CheckCircle2, RotateCcw, Undo2 } from "lucide-react";
 import { EvaluationSummary } from "@/components/evaluation/EvaluationSummary";
 import { ResultPanel } from "@/components/evaluation/ResultPanel";
 import { ScoreForm } from "@/components/evaluation/ScoreForm";
+import { StudentSwitcher } from "@/components/evaluation/StudentSwitcher";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -15,32 +16,33 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
 import { useToast } from "@/components/ui/Toast";
 import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
-import { formatScore, gradeFor } from "@/lib/evaluationUi";
+import { formatScore, gradeFor, studentUrl } from "@/lib/evaluationUi";
 import { EvaluationDetailView } from "@/lib/types";
 
 type Confirm = "publish" | "unpublish" | null;
 
 export default function CoordinatorEvaluationPage() {
   const params = useParams<{ thesisId: string }>();
+  const router = useRouter();
+  const studentId = useSearchParams().get("student");
   const toast = useToast();
   const [detail, setDetail] = useState<EvaluationDetailView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
 
-  const base = `/api/v1/evaluation/theses/${params.thesisId}`;
   const load = useCallback(async () => {
     try {
-      setDetail(await apiGet<EvaluationDetailView>(base));
+      setDetail(await apiGet<EvaluationDetailView>(studentUrl(params.thesisId, studentId)));
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, [base]);
+  }, [params.thesisId, studentId]);
 
   useEffect(() => { load(); }, [load]);
 
   async function act(path: string, message: string) {
     try {
-      await apiPost(`${base}/${path}`);
+      await apiPost(studentUrl(params.thesisId, detail?.student_id ?? null, `/${path}`));
       toast.success(message);
       await load();
     } catch (e) {
@@ -59,21 +61,28 @@ export default function CoordinatorEvaluationPage() {
   return (
     <>
       <PageHeader
-        title={detail.student_names.join(", ")}
-        description={`${detail.title} · Supervisor: ${detail.supervisor_name ?? "none"}`}
+        title={detail.student_name}
+        description={`${detail.student_number ? detail.student_number + " · " : ""}${detail.title} · Supervisor: ${
+          detail.supervisor_name ?? "none"
+        }`}
         actions={
           <Link href="/coordinator/evaluations">
             <Button variant="secondary" size="sm"><ArrowLeft className="h-4 w-4" />All evaluations</Button>
           </Link>
         }
       />
+      <StudentSwitcher
+        team={detail.team}
+        current={detail.student_id}
+        onSelect={(id) => router.replace(`/coordinator/evaluations/${params.thesisId}?student=${id}`)}
+      />
       <Card className="mb-6">
         <CardHeader
           title={published ? "The result is published" : "Publish the result"}
           description={
             published
-              ? "The student can see the result. Withdraw it if a mark needs to change."
-              : "The student sees nothing until you publish. The result is the average of all submitted evaluations."
+              ? "This student can see the result. Withdraw it if a mark needs to change."
+              : "This student sees nothing until you publish. The result is the average of all submitted evaluations of this student."
           }
           action={published ? <Badge tone="success">Published</Badge> : undefined}
         />
@@ -115,7 +124,7 @@ export default function CoordinatorEvaluationPage() {
               <RotateCcw className="h-4 w-4" />Reopen my evaluation
             </Button>
           )}
-          <ScoreForm key={`${detail.mine.status}-${detail.mine.id}`} detail={detail} onChanged={load} />
+          <ScoreForm key={`${detail.student_id}-${detail.mine.status}-${detail.mine.id}`} detail={detail} onChanged={load} />
         </div>
         <div className="space-y-6">
           {detail.others.length === 0 && (
@@ -143,7 +152,7 @@ export default function CoordinatorEvaluationPage() {
       <ConfirmDialog
         open={confirm === "publish"}
         title="Publish this result?"
-        message="The student will see the total, the grade, the breakdown and the comments."
+        message={`${detail.student_name} will see the total, the grade, the breakdown and the comments.`}
         confirmLabel="Publish"
         onConfirm={() => { setConfirm(null); act("publish", "Result published"); }}
         onCancel={() => setConfirm(null)}
@@ -151,7 +160,7 @@ export default function CoordinatorEvaluationPage() {
       <ConfirmDialog
         open={confirm === "unpublish"}
         title="Withdraw the published result?"
-        message="The student will no longer see it, and evaluators can change their marks."
+        message={`${detail.student_name} will no longer see it, and evaluators can change their marks.`}
         confirmLabel="Withdraw"
         danger
         onConfirm={() => { setConfirm(null); act("unpublish", "Result withdrawn"); }}
