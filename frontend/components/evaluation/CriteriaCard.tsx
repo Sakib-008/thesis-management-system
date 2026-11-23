@@ -13,6 +13,8 @@ import { CriteriaSet } from "@/lib/types";
 
 interface Row {
   id?: number;
+  code: string;
+  category: string;
   name: string;
   description: string;
   weight: string;
@@ -35,8 +37,12 @@ export function CriteriaCard() {
 
   const total = (rows ?? []).filter((r) => r.is_active).reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
   const rounded = Math.round(total * 100) / 100;
-  const complete = (rows ?? []).every((r) => r.name.trim().length >= 3 && Number(r.weight) > 0);
-  const valid = rows !== null && rows.length > 0 && complete && Math.abs(rounded - 100) < 0.01;
+  const codes = (rows ?? []).map((r) => r.code.trim().toLowerCase());
+  const complete = (rows ?? []).every(
+    (r) => r.code.trim() !== "" && r.category.trim() !== "" && r.name.trim().length >= 3 && Number(r.weight) > 0,
+  );
+  const uniqueCodes = new Set(codes).size === codes.length;
+  const valid = rows !== null && rows.length > 0 && complete && uniqueCodes && Math.abs(rounded - 100) < 0.01;
 
   const change = (i: number, patch: Partial<Row>) =>
     setRows((current) => (current ?? []).map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -47,7 +53,7 @@ export function CriteriaCard() {
     try {
       const body = { criteria: rows.map((r) => ({ ...r, weight: Number(r.weight) })) };
       setRows(toRows(await apiPut<CriteriaSet>("/api/v1/evaluation/criteria", body)));
-      toast.success("Criteria saved. Evaluations already made keep the criteria they were made with.");
+      toast.success("Marking sheet saved. Evaluations already made keep the sheet they were made with.");
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -58,8 +64,8 @@ export function CriteriaCard() {
   return (
     <Card className="h-fit">
       <CardHeader
-        title="Evaluation criteria"
-        description="What a thesis is marked on and how much each part counts. Active weights must total 100."
+        title="Defense marking sheet"
+        description="Course outcomes, the group each belongs to, and the maximum marks. Active marks must total 100."
       />
       {loadError && <div className="p-5"><Alert>{loadError}</Alert></div>}
       {!rows && !loadError && <Spinner className="mx-auto my-10 h-6 w-6" />}
@@ -67,13 +73,21 @@ export function CriteriaCard() {
         <CardContent className="space-y-4">
           {rows.map((r, i) => (
             <div key={r.id ?? `new-${i}`} className="space-y-2 rounded-lg border border-line p-3">
-              <div className="grid gap-2 sm:grid-cols-[1fr_90px]">
+              <div className="grid gap-2 sm:grid-cols-[80px_1fr_90px]">
                 <Input
-                  value={r.name}
-                  maxLength={150}
-                  placeholder="Name of the criterion"
-                  aria-label="Name of the criterion"
-                  onChange={(e) => change(i, { name: e.target.value })}
+                  value={r.code}
+                  maxLength={20}
+                  placeholder="CO1"
+                  aria-label="Outcome code"
+                  onChange={(e) => change(i, { code: e.target.value })}
+                />
+                <Input
+                  value={r.category}
+                  maxLength={60}
+                  placeholder="Group, e.g. Presentation"
+                  aria-label="Group"
+                  list="criteria-groups"
+                  onChange={(e) => change(i, { category: e.target.value })}
                 />
                 <Input
                   type="number"
@@ -81,10 +95,18 @@ export function CriteriaCard() {
                   max={100}
                   step="0.5"
                   value={r.weight}
-                  aria-label="Weight in percent"
+                  aria-label="Maximum marks"
+                  placeholder="Marks"
                   onChange={(e) => change(i, { weight: e.target.value })}
                 />
               </div>
+              <Input
+                value={r.name}
+                maxLength={150}
+                placeholder="Course outcome, e.g. Problem Analysis"
+                aria-label="Course outcome"
+                onChange={(e) => change(i, { name: e.target.value })}
+              />
               <Input
                 value={r.description}
                 maxLength={500}
@@ -105,7 +127,7 @@ export function CriteriaCard() {
                   size="sm"
                   variant="ghost"
                   className="text-danger hover:bg-danger/10"
-                  aria-label="Remove criterion"
+                  aria-label="Remove outcome"
                   onClick={() => setRows(rows.filter((_, j) => j !== i))}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -116,15 +138,33 @@ export function CriteriaCard() {
           <Button
             size="sm"
             variant="secondary"
-            onClick={() => setRows([...rows, { name: "", description: "", weight: "", is_active: true }])}
+            onClick={() =>
+              setRows([
+                ...rows,
+                {
+                  code: "",
+                  category: rows[rows.length - 1]?.category ?? "",
+                  name: "",
+                  description: "",
+                  weight: "",
+                  is_active: true,
+                },
+              ])
+            }
           >
-            <Plus className="h-4 w-4" />Add a criterion
+            <Plus className="h-4 w-4" />Add an outcome
           </Button>
+          <datalist id="criteria-groups">
+            {Array.from(new Set(rows.map((r) => r.category).filter(Boolean))).map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          {!uniqueCodes && <Alert>Each outcome needs its own code.</Alert>}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
             <Badge tone={Math.abs(rounded - 100) < 0.01 ? "success" : "warning"}>
-              Active weights add up to {rounded}
+              Active marks add up to {rounded} of 100
             </Badge>
-            <Button size="sm" loading={saving} disabled={!valid} onClick={save}>Save criteria</Button>
+            <Button size="sm" loading={saving} disabled={!valid} onClick={save}>Save marking sheet</Button>
           </div>
         </CardContent>
       )}

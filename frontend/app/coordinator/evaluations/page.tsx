@@ -37,7 +37,7 @@ export default function CoordinatorEvaluationsPage() {
     <>
       <PageHeader
         title="Evaluations"
-        description="Check the marks of each thesis, add your own, and publish the result to the student."
+        description="Check the marks of each student, add your own, and publish the result to the student."
       />
       {error && <Alert>{error}</Alert>}
       <Tabs
@@ -57,9 +57,12 @@ export default function CoordinatorEvaluationsPage() {
           emptyText={rows !== null && visible.length === 0 ? "Nothing in this view." : undefined}
         >
           {visible.map((r) => (
-            <tr key={r.thesis_id}>
+            <tr key={`${r.thesis_id}-${r.student_id}`}>
               <Td>
-                <div className="font-medium">{r.student_names.join(", ")}</div>
+                <div className="font-medium">
+                  {r.student_name}
+                  {r.student_number && <span className="ml-2 text-xs text-subtle">{r.student_number}</span>}
+                </div>
                 <div className="max-w-[260px] truncate text-xs text-subtle">{r.title}</div>
               </Td>
               <Td>{r.supervisor_name ?? "-"}</Td>
@@ -80,7 +83,7 @@ export default function CoordinatorEvaluationsPage() {
                 )}
               </Td>
               <Td className="text-right">
-                <Link href={`/coordinator/evaluations/${r.thesis_id}`}>
+                <Link href={`/coordinator/evaluations/${r.thesis_id}?student=${r.student_id}`}>
                   <Button size="sm" variant={stateOf(r) === "ready" ? "primary" : "secondary"}>
                     {stateOf(r) === "ready" ? "Review and publish" : "Open"}
                   </Button>

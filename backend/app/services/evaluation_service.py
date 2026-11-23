@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import ConflictError, InvalidInputError, NotFoundError
 from app.models.ai import SystemSetting
 from app.models.evaluation import Evaluation, EvaluationCriterion, ThesisResult
-from app.models.profile import Supervisor
+from app.models.profile import Student, Supervisor
 from app.models.thesis import SupervisorAssignment, ThesisProposal
 from app.models.user import User, UserRole
 from app.schemas.evaluation import (
@@ -18,10 +18,12 @@ from app.schemas.evaluation import (
     EvaluationRow,
     GradeBand,
     GradingIn,
+    GroupTotal,
     ResultComment,
     ResultCriterion,
     ResultOut,
     ScoreOut,
+    TeamMember,
 )
 from app.services import meeting_service as meetings
 from app.services.audit import log_audit
@@ -48,7 +50,8 @@ def _now() -> datetime:
 # ---------------------------------------------------------------- criteria
 def _criterion_out(c: EvaluationCriterion) -> CriterionOut:
     return CriterionOut(
-        id=c.id, name=c.name, description=c.description, weight=float(c.weight), is_active=c.is_active
+        id=c.id, code=c.code, category=c.category, name=c.name, description=c.description,
+        weight=float(c.weight), is_active=c.is_active,
     )
 
 
@@ -66,13 +69,18 @@ def criteria_out(db: Session, include_inactive: bool = False) -> CriteriaOut:
 
 
 def set_criteria(db: Session, actor: User, data: CriteriaIn) -> CriteriaOut:
-    """Replace the whole list. The weights of the active criteria must add up to exactly 100."""
+    """Replace the whole list. The maximum marks of the active outcomes must add up to exactly 100."""
     names = [c.name.strip().casefold() for c in data.criteria]
     if len(set(names)) != len(names):
         raise InvalidInputError("Each criterion needs its own name")
+    codes = [c.code.strip().casefold() for c in data.criteria]
+    if len(set(codes)) != len(codes):
+        raise InvalidInputError("Each criterion needs its own code")
     total = round(sum(c.weight for c in data.criteria if c.is_active), 2)
     if abs(total - 100) >= 0.01:
-        raise InvalidInputError(f"The weights of the active criteria must add up to 100. They add up to {total:g}")
+        raise InvalidInputError(
+            f"The maximum marks of the active criteria must add up to 100. They add up to {total:g}"
+        )
     existing = {c.id: c for c in _all_criteria(db)}
     kept: set[int] = set()
     for order, item in enumerate(data.criteria, start=1):
@@ -81,6 +89,7 @@ def set_criteria(db: Session, actor: User, data: CriteriaIn) -> CriteriaOut:
             row = EvaluationCriterion()
             db.add(row)
         row.name, row.description = item.name.strip(), item.description.strip()
+        row.code, row.category = item.code.strip(), item.category.strip()
         row.weight, row.is_active, row.sort_order = Decimal(str(item.weight)), item.is_active, order
         db.flush()
         kept.add(row.id)
@@ -144,10 +153,19 @@ def _proposal_for(db: Session, thesis_id: int, user: User) -> ThesisProposal:
 
 # ---------------------------------------------------------------- marks
 def _total(scores: list[dict]) -> float:
-    weights = sum(s["weight"] for s in scores)
-    if weights <= 0:
-        return 0.0
-    return round(sum(s["weight"] * (s["score"] or 0) for s in scores) / weights, 2)
+    """The marks add up to the total out of 100. An outcome with no marks yet counts as 0."""
+    return round(sum(s["score"] or 0 for s in scores), 2)
+
+
+def _groups(scores: list[dict]) -> list[GroupTotal]:
+    """Marks and maximum per group, in the order the groups first appear (Presentation, Project Evaluation, ...)."""
+    slots: dict[str, dict] = {}
+    for s in scores:
+        key = s.get("category") or ""
+        slot = slots.setdefault(key, {"marks": 0.0, "max": 0.0})
+        slot["marks"] += s.get("score") or 0
+        slot["max"] += s["weight"]
+    return [GroupTotal(category=k, marks=round(v["marks"], 2), max=round(v["max"], 2)) for k, v in slots.items()]
 
 
 def _evaluation_out(ev: Evaluation | None, evaluator: User, bands: list[dict]) -> EvaluationOut:
@@ -160,6 +178,7 @@ def _evaluation_out(ev: Evaluation | None, evaluator: User, bands: list[dict]) -
             scores=[],
             comment="",
             total=0.0,
+            groups=[],
             grade="",
             submitted_at=None,
             updated_at=None,
@@ -173,18 +192,34 @@ def _evaluation_out(ev: Evaluation | None, evaluator: User, bands: list[dict]) -
         scores=[ScoreOut(**s) for s in ev.scores_json],
         comment=ev.comment,
         total=total,
+        groups=_groups(ev.scores_json),
         grade=grade_for(bands, total) if ev.status == "final" else "",
         submitted_at=ev.submitted_at,
         updated_at=ev.updated_at,
     )
 
 
-def _evaluations_of(db: Session, thesis_id: int) -> list[Evaluation]:
-    return list(db.scalars(select(Evaluation).where(Evaluation.thesis_id == thesis_id).order_by(Evaluation.id)))
+def _student(db: Session, thesis_id: int, student_id: int | None) -> Student:
+    """The student of this thesis whose marks are meant. Without an id, the first student of the team."""
+    members = meetings.students_of_thesis(db, thesis_id)
+    if student_id is None and members:
+        return members[0]
+    student = next((m for m in members if m.id == student_id), None)
+    if student is None:
+        raise NotFoundError("Student not found in this thesis")
+    return student
 
 
-def _result_out(db: Session, thesis_id: int) -> ResultOut:
-    row = db.scalar(select(ThesisResult).where(ThesisResult.thesis_id == thesis_id))
+def _evaluations_of(db: Session, student: Student) -> list[Evaluation]:
+    return list(db.scalars(select(Evaluation).where(Evaluation.student_id == student.id).order_by(Evaluation.id)))
+
+
+def _result_row(db: Session, student_id: int) -> ThesisResult | None:
+    return db.scalar(select(ThesisResult).where(ThesisResult.student_id == student_id))
+
+
+def _result_out(db: Session, student_id: int) -> ResultOut:
+    row = _result_row(db, student_id)
     if row is None:
         return ResultOut(published=False)
     return ResultOut(
@@ -193,50 +228,68 @@ def _result_out(db: Session, thesis_id: int) -> ResultOut:
         grade=row.grade,
         evaluators_count=row.evaluators_count,
         criteria=[ResultCriterion(**c) for c in row.breakdown],
+        groups=_groups([{**c, "score": c["average"]} for c in row.breakdown]),
         comments=[ResultComment(**c) for c in row.comments],
         published_at=row.published_at,
     )
 
 
-def _names(db: Session, thesis_id: int) -> list[str]:
-    return [s.user.full_name for s in meetings.students_of_thesis(db, thesis_id)]
-
-
 def list_theses(db: Session, user: User) -> list[EvaluationRow]:
+    """One row for each student of each thesis the person may evaluate."""
     bands = get_bands(db)
     out = []
     for proposal in _supervised_proposals(db, user):
-        evaluations = _evaluations_of(db, proposal.thesis_id)
-        finals = [e for e in evaluations if e.status == "final"]
-        mine = next((e for e in evaluations if e.evaluator_id == user.id), None)
-        average = round(sum(float(e.total) for e in finals) / len(finals), 2) if finals else None
         supervisor = meetings.supervisor_of_thesis(db, proposal.thesis_id)
-        out.append(
-            EvaluationRow(
-                thesis_id=proposal.thesis_id,
-                proposal_id=proposal.id,
-                title=proposal.title,
-                student_names=_names(db, proposal.thesis_id),
-                supervisor_name=supervisor.user.full_name if supervisor else None,
-                my_status=mine.status if mine else "none",
-                finals=len(finals),
-                drafts=len(evaluations) - len(finals),
-                average=average,
-                grade=grade_for(bands, average) if average is not None else None,
-                published=_result_out(db, proposal.thesis_id).published,
+        for student in meetings.students_of_thesis(db, proposal.thesis_id):
+            evaluations = _evaluations_of(db, student)
+            finals = [e for e in evaluations if e.status == "final"]
+            mine = next((e for e in evaluations if e.evaluator_id == user.id), None)
+            average = round(sum(float(e.total) for e in finals) / len(finals), 2) if finals else None
+            out.append(
+                EvaluationRow(
+                    thesis_id=proposal.thesis_id,
+                    proposal_id=proposal.id,
+                    student_id=student.id,
+                    student_name=student.user.full_name,
+                    student_number=student.student_number,
+                    title=proposal.title,
+                    supervisor_name=supervisor.user.full_name if supervisor else None,
+                    my_status=mine.status if mine else "none",
+                    finals=len(finals),
+                    drafts=len(evaluations) - len(finals),
+                    average=average,
+                    grade=grade_for(bands, average) if average is not None else None,
+                    published=_result_row(db, student.id) is not None,
+                )
             )
-        )
     return out
 
 
-def detail(db: Session, thesis_id: int, user: User) -> EvaluationDetail:
+def _team(db: Session, thesis_id: int, user: User) -> list[TeamMember]:
+    mine = {
+        e.student_id: e.status
+        for e in db.scalars(
+            select(Evaluation).where(Evaluation.thesis_id == thesis_id, Evaluation.evaluator_id == user.id)
+        )
+    }
+    return [
+        TeamMember(
+            student_id=m.id, name=m.user.full_name, student_number=m.student_number,
+            my_status=mine.get(m.id, "none"), published=_result_row(db, m.id) is not None,
+        )
+        for m in meetings.students_of_thesis(db, thesis_id)
+    ]
+
+
+def detail(db: Session, thesis_id: int, user: User, student_id: int | None = None) -> EvaluationDetail:
     proposal = _proposal_for(db, thesis_id, user)
+    student = _student(db, thesis_id, student_id)
     bands = get_bands(db)
-    evaluations = _evaluations_of(db, thesis_id)
+    evaluations = _evaluations_of(db, student)
     mine = next((e for e in evaluations if e.evaluator_id == user.id), None)
     others = [e for e in evaluations if e.evaluator_id != user.id] if user.role == UserRole.coordinator else []
     criteria = criteria_out(db)
-    result = _result_out(db, thesis_id)
+    result = _result_out(db, student.id)
     finals = sum(1 for e in evaluations if e.status == "final")
     drafts = len(evaluations) - finals
     blocked = None
@@ -251,7 +304,10 @@ def detail(db: Session, thesis_id: int, user: User) -> EvaluationDetail:
         thesis_id=thesis_id,
         proposal_id=proposal.id,
         title=proposal.title,
-        student_names=_names(db, thesis_id),
+        student_id=student.id,
+        student_name=student.user.full_name,
+        student_number=student.student_number,
+        team=_team(db, thesis_id, user),
         supervisor_name=supervisor.user.full_name if supervisor else None,
         criteria=criteria.criteria,
         criteria_valid=criteria.valid,
@@ -264,32 +320,53 @@ def detail(db: Session, thesis_id: int, user: User) -> EvaluationDetail:
     )
 
 
-def _editable(db: Session, thesis_id: int, user: User) -> tuple[Evaluation | None, list[EvaluationCriterion]]:
+def _my_evaluation(db: Session, student: Student, user: User) -> Evaluation | None:
+    return db.scalar(
+        select(Evaluation).where(Evaluation.student_id == student.id, Evaluation.evaluator_id == user.id)
+    )
+
+
+def _editable(
+    db: Session, thesis_id: int, student: Student, user: User
+) -> tuple[Evaluation | None, list[EvaluationCriterion]]:
     _proposal_for(db, thesis_id, user)
     criteria = [c for c in _all_criteria(db) if c.is_active]
     if not criteria or abs(sum(float(c.weight) for c in criteria) - 100) >= 0.01:
-        raise ConflictError("The evaluation criteria are not ready. The admin must set weights that add up to 100")
-    if _result_out(db, thesis_id).published:
+        raise ConflictError(
+            "The evaluation criteria are not ready. The admin must set maximum marks that add up to 100"
+        )
+    if _result_row(db, student.id) is not None:
         raise ConflictError("The result is published. The coordinator must unpublish it before anything changes")
-    mine = db.scalar(select(Evaluation).where(Evaluation.thesis_id == thesis_id, Evaluation.evaluator_id == user.id))
+    mine = _my_evaluation(db, student, user)
     if mine is not None and mine.status == "final":
         raise ConflictError("Your evaluation is final. Ask the coordinator to reopen it to change it")
     return mine, criteria
 
 
-def save_mine(db: Session, thesis_id: int, user: User, data: EvaluationIn) -> Evaluation:
-    mine, criteria = _editable(db, thesis_id, user)
+def save_mine(
+    db: Session, thesis_id: int, user: User, data: EvaluationIn, student_id: int | None = None
+) -> Evaluation:
+    student = _student(db, thesis_id, student_id)
+    mine, criteria = _editable(db, thesis_id, student, user)
     by_id = {c.id: c for c in criteria}
     given: dict[int, float] = {}
     for item in data.scores:
-        if item.criterion_id not in by_id:
+        criterion = by_id.get(item.criterion_id)
+        if criterion is None:
             raise InvalidInputError("One of the scores is for a criterion that does not exist")
+        if item.score > float(criterion.weight):
+            label = criterion.code or criterion.name
+            raise InvalidInputError(f"The marks for {label} cannot be more than {float(criterion.weight):g}")
         given[item.criterion_id] = item.score
     scores = [
-        {"criterion_id": c.id, "name": c.name, "weight": float(c.weight), "score": given.get(c.id)} for c in criteria
+        {
+            "criterion_id": c.id, "code": c.code, "category": c.category, "name": c.name,
+            "weight": float(c.weight), "score": given.get(c.id),
+        }
+        for c in criteria
     ]
     if mine is None:
-        mine = Evaluation(thesis_id=thesis_id, evaluator_id=user.id, status="draft")
+        mine = Evaluation(thesis_id=thesis_id, student_id=student.id, evaluator_id=user.id, status="draft")
         db.add(mine)
     mine.scores_json = scores
     mine.comment = data.comment.strip()
@@ -299,29 +376,33 @@ def save_mine(db: Session, thesis_id: int, user: User, data: EvaluationIn) -> Ev
     return mine
 
 
-def submit_mine(db: Session, thesis_id: int, user: User) -> Evaluation:
-    mine, _ = _editable(db, thesis_id, user)
+def submit_mine(db: Session, thesis_id: int, user: User, student_id: int | None = None) -> Evaluation:
+    student = _student(db, thesis_id, student_id)
+    mine, _ = _editable(db, thesis_id, student, user)
     if mine is None or any(s["score"] is None for s in mine.scores_json):
         raise InvalidInputError("Give a score for every criterion before you submit")
     mine.status = "final"
     mine.submitted_at = mine.updated_at = _now()
-    log_audit(db, user.id, "evaluation.submit", "thesis", thesis_id, {"total": float(mine.total)})
+    log_audit(
+        db, user.id, "evaluation.submit", "thesis", thesis_id, {"total": float(mine.total), "student_id": student.id}
+    )
     db.flush()
     return mine
 
 
-def discard_mine(db: Session, thesis_id: int, user: User) -> None:
+def discard_mine(db: Session, thesis_id: int, user: User, student_id: int | None = None) -> None:
     """Throw away my own unfinished evaluation. Without this, a forgotten draft would block publishing for good."""
     _proposal_for(db, thesis_id, user)
-    mine = db.scalar(select(Evaluation).where(Evaluation.thesis_id == thesis_id, Evaluation.evaluator_id == user.id))
+    student = _student(db, thesis_id, student_id)
+    mine = _my_evaluation(db, student, user)
     if mine is None:
-        raise NotFoundError("You have not started an evaluation for this thesis")
+        raise NotFoundError("You have not started an evaluation for this student")
     if mine.status == "final":
         raise ConflictError("Your evaluation is final. Ask the coordinator to reopen it first")
-    if _result_out(db, thesis_id).published:
+    if _result_row(db, student.id) is not None:
         raise ConflictError("The result is published. The coordinator must unpublish it before anything changes")
     db.delete(mine)
-    log_audit(db, user.id, "evaluation.discard", "thesis", thesis_id)
+    log_audit(db, user.id, "evaluation.discard", "thesis", thesis_id, {"student_id": student.id})
     db.flush()
 
 
@@ -330,22 +411,24 @@ def reopen(db: Session, thesis_id: int, evaluation_id: int, user: User) -> Evalu
     ev = db.get(Evaluation, evaluation_id)
     if ev is None or ev.thesis_id != thesis_id:
         raise NotFoundError("Evaluation not found")
-    if _result_out(db, thesis_id).published:
+    if _result_row(db, ev.student_id) is not None:
         raise ConflictError("Unpublish the result first")
     if ev.status != "final":
         raise ConflictError("This evaluation is not final")
     ev.status, ev.submitted_at, ev.updated_at = "draft", None, _now()
-    log_audit(db, user.id, "evaluation.reopen", "thesis", thesis_id, {"evaluator": ev.evaluator_id})
+    log_audit(db, user.id, "evaluation.reopen", "thesis", thesis_id,
+              {"evaluator": ev.evaluator_id, "student_id": ev.student_id})
     db.flush()
     return ev
 
 
 # ---------------------------------------------------------------- publishing
-def publish(db: Session, thesis_id: int, user: User) -> ResultOut:
+def publish(db: Session, thesis_id: int, user: User, student_id: int | None = None) -> ResultOut:
     _proposal_for(db, thesis_id, user)
-    if _result_out(db, thesis_id).published:
+    student = _student(db, thesis_id, student_id)
+    if _result_row(db, student.id) is not None:
         raise ConflictError("The result is already published")
-    evaluations = _evaluations_of(db, thesis_id)
+    evaluations = _evaluations_of(db, student)
     finals = [e for e in evaluations if e.status == "final"]
     if not finals:
         raise ConflictError("No evaluation has been submitted yet")
@@ -356,18 +439,26 @@ def publish(db: Session, thesis_id: int, user: User) -> ResultOut:
     for ev in finals:
         for s in ev.scores_json:
             slot = per_criterion.setdefault(
-                s["criterion_id"], {"name": s["name"], "weight": s["weight"], "sum": 0.0, "n": 0}
+                s["criterion_id"],
+                {
+                    "code": s.get("code", ""), "category": s.get("category", ""), "name": s["name"],
+                    "weight": s["weight"], "sum": 0.0, "n": 0,
+                },
             )
             slot["sum"] += s["score"]
             slot["n"] += 1
     breakdown = [
-        {"name": v["name"], "weight": v["weight"], "average": round(v["sum"] / v["n"], 2)}
+        {
+            "code": v["code"], "category": v["category"], "name": v["name"], "weight": v["weight"],
+            "average": round(v["sum"] / v["n"], 2),
+        }
         for v in per_criterion.values()
     ]
     comments = [{"evaluator_name": e.evaluator.full_name, "comment": e.comment} for e in finals if e.comment]
     db.add(
         ThesisResult(
             thesis_id=thesis_id,
+            student_id=student.id,
             final_total=Decimal(str(total)),
             grade=grade_for(get_bands(db), total),
             evaluators_count=len(finals),
@@ -376,23 +467,25 @@ def publish(db: Session, thesis_id: int, user: User) -> ResultOut:
             published_by=user.id,
         )
     )
-    log_audit(db, user.id, "evaluation.publish", "thesis", thesis_id, {"total": total})
+    log_audit(db, user.id, "evaluation.publish", "thesis", thesis_id, {"total": total, "student_id": student.id})
     db.flush()
-    return _result_out(db, thesis_id)
+    return _result_out(db, student.id)
 
 
-def unpublish(db: Session, thesis_id: int, user: User) -> None:
+def unpublish(db: Session, thesis_id: int, user: User, student_id: int | None = None) -> None:
     _proposal_for(db, thesis_id, user)
-    row = db.scalar(select(ThesisResult).where(ThesisResult.thesis_id == thesis_id))
+    student = _student(db, thesis_id, student_id)
+    row = _result_row(db, student.id)
     if row is None:
         raise ConflictError("The result is not published")
     db.delete(row)
-    log_audit(db, user.id, "evaluation.unpublish", "thesis", thesis_id)
+    log_audit(db, user.id, "evaluation.unpublish", "thesis", thesis_id, {"student_id": student.id})
     db.flush()
 
 
 def my_result(db: Session, user: User) -> ResultOut:
-    thesis_id = meetings.own_thesis_id(db, user)
-    if thesis_id is None:
+    """The published result of the signed-in student, and nothing of anyone else's."""
+    student = db.scalar(select(Student).where(Student.user_id == user.id))
+    if student is None:
         return ResultOut(published=False)
-    return _result_out(db, thesis_id)
+    return _result_out(db, student.id)

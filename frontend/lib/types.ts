@@ -394,6 +394,8 @@ export interface ThesisDocument {
 
 export interface EvaluationCriterion {
   id: number;
+  code: string;
+  category: string;
   name: string;
   description: string;
   weight: number;
@@ -411,8 +413,16 @@ export interface GradeBand {
   grade: string;
 }
 
+export interface GroupTotal {
+  category: string;
+  marks: number;
+  max: number;
+}
+
 export interface ScoreEntry {
   criterion_id: number;
+  code: string;
+  category: string;
   name: string;
   weight: number;
   score: number | null;
@@ -426,12 +436,15 @@ export interface EvaluationEntry {
   scores: ScoreEntry[];
   comment: string;
   total: number;
+  groups: GroupTotal[];
   grade: string;
   submitted_at: string | null;
   updated_at: string | null;
 }
 
 export interface ResultCriterionRow {
+  code: string;
+  category: string;
   name: string;
   weight: number;
   average: number;
@@ -443,6 +456,7 @@ export interface ThesisResultView {
   grade: string | null;
   evaluators_count: number;
   criteria: ResultCriterionRow[];
+  groups: GroupTotal[];
   comments: { evaluator_name: string; comment: string }[];
   published_at: string | null;
 }
@@ -450,8 +464,10 @@ export interface ThesisResultView {
 export interface EvaluationListRow {
   thesis_id: number;
   proposal_id: number;
+  student_id: number;
+  student_name: string;
+  student_number: string | null;
   title: string;
-  student_names: string[];
   supervisor_name: string | null;
   my_status: "none" | "draft" | "final";
   finals: number;
@@ -461,11 +477,22 @@ export interface EvaluationListRow {
   published: boolean;
 }
 
+export interface TeamMember {
+  student_id: number;
+  name: string;
+  student_number: string | null;
+  my_status: "none" | "draft" | "final";
+  published: boolean;
+}
+
 export interface EvaluationDetailView {
   thesis_id: number;
   proposal_id: number;
   title: string;
-  student_names: string[];
+  student_id: number;
+  student_name: string;
+  student_number: string | null;
+  team: TeamMember[];
   supervisor_name: string | null;
   criteria: EvaluationCriterion[];
   criteria_valid: boolean;

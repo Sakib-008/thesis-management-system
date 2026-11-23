@@ -114,6 +114,10 @@ def _meeting(db: Session, action: str, entity_id: int, actor_id: int | None, met
         return [(_to_supervisor(supervisor_id), f"{names} asked for a meeting on {when}", "/supervisor/meetings")]
     if action == "meeting.accept":
         return [(students, f"Your meeting on {when} was accepted", "/student/meetings")]
+    if action == "meeting.schedule":
+        return [(students, f"Your supervisor scheduled a meeting on {when}", "/student/meetings")]
+    if action == "meeting.reschedule":
+        return [(students, f"Your meeting was moved to {when}", "/student/meetings")]
     if action == "meeting.decline":
         return [(students, f"Your meeting request for {when} was declined", "/student/meetings")]
     if action == "meeting.complete":
@@ -188,7 +192,11 @@ def _document(db: Session, action: str, entity_id: int, actor_id: int | None, me
 
 
 def _evaluation(db: Session, action: str, entity_id: int, actor_id: int | None, meta: dict) -> list[Note]:
+    """Marks and results are per student, so only that student is named and told."""
     students, supervisor_id, names, _ = _people(db, entity_id)
+    member = next((s for s in meetings.students_of_thesis(db, entity_id) if s.id == meta.get("student_id")), None)
+    if member is not None:
+        students, names = [member.user_id], member.user.full_name
     if action == "evaluation.submit":
         return [
             (_coordinators(db), f"An evaluation was submitted for {names}", f"/coordinator/evaluations/{entity_id}")
@@ -216,7 +224,16 @@ RULES = {
         _proposal,
     ),
     **dict.fromkeys(
-        ("meeting.request", "meeting.accept", "meeting.decline", "meeting.complete", "meeting.cancel"), _meeting
+        (
+            "meeting.request",
+            "meeting.accept",
+            "meeting.schedule",
+            "meeting.reschedule",
+            "meeting.decline",
+            "meeting.complete",
+            "meeting.cancel",
+        ),
+        _meeting,
     ),
     **dict.fromkeys(("report.submit", "report.sign", "report.return"), _report),
     **dict.fromkeys(

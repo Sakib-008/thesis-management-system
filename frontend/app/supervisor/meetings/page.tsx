@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { CalendarClock, MapPin } from "lucide-react";
+import { CalendarClock, CalendarPlus, MapPin } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Field, Input, Textarea } from "@/components/ui/Form";
+import { Field, Input, Select, Textarea } from "@/components/ui/Form";
 import { Modal } from "@/components/ui/Modal";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Spinner } from "@/components/ui/Spinner";
@@ -17,10 +17,11 @@ import { apiGet, apiPost, errorMessage } from "@/lib/apiClient";
 import {
   MEETING_LABEL, MEETING_TONE, REPORT_LABEL, REPORT_TONE, formatDateTime, fromDateTimeInputs, toDateTimeInputs,
 } from "@/lib/reportStatus";
-import { Meeting, MeetingStatus } from "@/lib/types";
+import { Meeting, MeetingStatus, ThesisProgress } from "@/lib/types";
 
 type Tab = "requests" | "upcoming" | "held" | "other";
-type Action = { kind: "accept" | "decline" | "record"; meeting: Meeting } | null;
+type Kind = "accept" | "decline" | "record" | "reschedule";
+type Action = { kind: Kind; meeting: Meeting } | null;
 
 const TAB_STATUS: Record<Tab, MeetingStatus[]> = {
   requests: ["requested"],
@@ -36,6 +37,9 @@ export default function SupervisorMeetingsPage() {
   const [tab, setTab] = useState<Tab>("requests");
   const [action, setAction] = useState<Action>(null);
   const [busy, setBusy] = useState(false);
+  const [students, setStudents] = useState<ThesisProgress[]>([]);
+  const [scheduling, setScheduling] = useState(false);
+  const [sched, setSched] = useState({ thesisId: "", date: "", time: "10:00", mode: "in_person", location: "", agenda: "" });
   const [form, setForm] = useState({
     date: "", time: "", location: "", reason: "", discussion: "", decisions: "", nextDate: "", nextTime: "10:00",
   });
@@ -51,6 +55,9 @@ export default function SupervisorMeetingsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    apiGet<ThesisProgress[]>("/api/v1/milestones/progress").then(setStudents).catch(() => setStudents([]));
+  }, []);
 
   const all = meetings ?? [];
   const inTab = (t: Tab) => all.filter((m) => TAB_STATUS[t].includes(m.status));
@@ -60,7 +67,7 @@ export default function SupervisorMeetingsPage() {
       : b.meeting_date.localeCompare(a.meeting_date),
   );
 
-  function open(kind: "accept" | "decline" | "record", meeting: Meeting) {
+  function open(kind: Kind, meeting: Meeting) {
     const { date, time } = toDateTimeInputs(meeting.meeting_date);
     setForm({
       date, time, location: meeting.location, reason: "", discussion: "", decisions: "", nextDate: "",
@@ -81,6 +88,12 @@ export default function SupervisorMeetingsPage() {
           location: form.location,
         });
         toast.success("Meeting scheduled");
+      } else if (action.kind === "reschedule") {
+        await apiPost(`${base}/reschedule`, {
+          meeting_date: fromDateTimeInputs(form.date, form.time),
+          location: form.location,
+        });
+        toast.success("Meeting moved. The student has been told.");
       } else if (action.kind === "decline") {
         await apiPost(`${base}/decline`, { reason: form.reason });
         toast.success("Request declined");
@@ -101,6 +114,29 @@ export default function SupervisorMeetingsPage() {
     }
   }
 
+  async function schedule(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await apiPost("/api/v1/meetings/schedule", {
+        thesis_id: Number(sched.thesisId),
+        meeting_date: fromDateTimeInputs(sched.date, sched.time),
+        agenda: sched.agenda,
+        mode: sched.mode,
+        location: sched.location,
+      });
+      toast.success("Meeting scheduled. The student has been told.");
+      setScheduling(false);
+      setSched({ thesisId: "", date: "", time: "10:00", mode: "in_person", location: "", agenda: "" });
+      setTab("upcoming");
+      await load();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function cancel(id: number) {
     try {
       await apiPost(`/api/v1/meetings/${id}/cancel`);
@@ -111,7 +147,12 @@ export default function SupervisorMeetingsPage() {
     }
   }
 
-  const titles = { accept: "Accept the meeting", decline: "Decline the request", record: "Record the meeting" };
+  const titles = {
+    accept: "Accept the meeting",
+    decline: "Decline the request",
+    record: "Record the meeting",
+    reschedule: "Move the meeting",
+  };
 
   return (
     <>
@@ -120,6 +161,11 @@ export default function SupervisorMeetingsPage() {
         description={
           "Answer meeting requests and record what was discussed. " +
           "Recording a meeting lets the student write the report."
+        }
+        actions={
+          <Button onClick={() => setScheduling(true)} disabled={students.length === 0}>
+            <CalendarPlus className="h-4 w-4" />Schedule a meeting
+          </Button>
         }
       />
       {error && <Alert>{error}</Alert>}
@@ -168,6 +214,7 @@ export default function SupervisorMeetingsPage() {
                   {m.status === "scheduled" && (
                     <div className="flex gap-2">
                       <Button size="sm" onClick={() => open("record", m)}>Record meeting</Button>
+                      <Button size="sm" variant="secondary" onClick={() => open("reschedule", m)}>Change time</Button>
                       <Button size="sm" variant="secondary" onClick={() => cancel(m.id)}>Cancel</Button>
                     </div>
                   )}
@@ -204,7 +251,7 @@ export default function SupervisorMeetingsPage() {
           <>
             <Button variant="secondary" onClick={() => setAction(null)}>Cancel</Button>
             <Button type="submit" form="meeting-action-form" loading={busy}>
-              {action?.kind === "decline" ? "Decline" : action?.kind === "record" ? "Save" : "Accept"}
+              {action?.kind === "decline" ? "Decline" : action?.kind === "record" ? "Save" : action?.kind === "reschedule" ? "Move" : "Accept"}
             </Button>
           </>
         }
@@ -216,7 +263,7 @@ export default function SupervisorMeetingsPage() {
               <div className="text-subtle">{action.meeting.agenda}</div>
             </div>
 
-            {action.kind === "accept" && (
+            {(action.kind === "accept" || action.kind === "reschedule") && (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Date">
@@ -236,7 +283,7 @@ export default function SupervisorMeetingsPage() {
                     />
                   </Field>
                 </div>
-                <Field label="Place or link" hint="Change the time or place if you need to.">
+                <Field label="Place or link" hint={action.kind === "reschedule" ? "The student is told the new time." : "Change the time or place if you need to."}>
                   <Input
                     value={form.location}
                     onChange={(e) => setForm({ ...form, location: e.target.value })}
@@ -293,6 +340,54 @@ export default function SupervisorMeetingsPage() {
           </form>
         )}
       </Modal>
+      <Modal
+        open={scheduling}
+        title="Schedule a meeting"
+        onClose={() => setScheduling(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setScheduling(false)}>Cancel</Button>
+            <Button type="submit" form="meeting-schedule-form" loading={busy}>Schedule</Button>
+          </>
+        }
+      >
+        <form id="meeting-schedule-form" className="space-y-4" onSubmit={schedule}>
+          <Field label="Student" hint="Only your own students are listed.">
+            <Select
+              value={sched.thesisId}
+              onChange={(e) => setSched({ ...sched, thesisId: e.target.value })}
+              required
+            >
+              <option value="">Choose a student</option>
+              {students.map((s) => (
+                <option key={s.thesis_id} value={s.thesis_id}>{s.student_names.join(", ")} · {s.title}</option>
+              ))}
+            </Select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Date">
+              <Input type="date" value={sched.date} onChange={(e) => setSched({ ...sched, date: e.target.value })} required />
+            </Field>
+            <Field label="Time">
+              <Input type="time" value={sched.time} onChange={(e) => setSched({ ...sched, time: e.target.value })} required />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Mode">
+              <Select value={sched.mode} onChange={(e) => setSched({ ...sched, mode: e.target.value })}>
+                <option value="in_person">In person</option>
+                <option value="online">Online</option>
+              </Select>
+            </Field>
+            <Field label="Place or link">
+              <Input value={sched.location} maxLength={200} onChange={(e) => setSched({ ...sched, location: e.target.value })} />
+            </Field>
+          </div>
+          <Field label="Agenda" hint="What the meeting is about.">
+            <Textarea value={sched.agenda} onChange={(e) => setSched({ ...sched, agenda: e.target.value })} required minLength={3} />
+          </Field>
+        </form>
+      </Modal>
     </>
   );
-}
+}

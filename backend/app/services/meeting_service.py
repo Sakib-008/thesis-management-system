@@ -6,7 +6,7 @@ from app.models.meetings import Meeting, WeeklyReport
 from app.models.profile import Student, Supervisor
 from app.models.thesis import ProposalStatus, SupervisorAssignment, ThesisProposal, thesis_members
 from app.models.user import User, UserRole
-from app.schemas.meetings import AcceptIn, CompleteIn, MeetingIn, MeetingOut
+from app.schemas.meetings import AcceptIn, CompleteIn, MeetingIn, MeetingOut, RescheduleIn, ScheduleIn
 from app.services import proposal_service
 from app.services.audit import log_audit
 MAX_OPEN_REQUESTS = 3
@@ -140,6 +140,57 @@ def accept(db: Session, meeting_id: int, user: User, data: AcceptIn) -> Meeting:
     log_audit(db, user.id, "meeting.accept", "meeting", meeting.id)
     db.flush()
     return meeting
+def _check_future(when: datetime) -> datetime:
+    when = aware(when)
+    if when < _now() - timedelta(minutes=5):
+        raise InvalidInputError("Choose a date and time in the future")
+    return when
+
+
+def _check_free(db: Session, thesis_id: int, when: datetime, ignore_id: int | None = None) -> None:
+    """One thesis cannot have two scheduled meetings at the same moment."""
+    clash = db.scalar(
+        select(Meeting.id).where(
+            Meeting.thesis_id == thesis_id, Meeting.status == "scheduled", Meeting.meeting_date == when,
+            Meeting.id != (ignore_id or 0),
+        )
+    )
+    if clash is not None:
+        raise ConflictError("A meeting is already scheduled for that thesis at that time")
+
+
+def schedule(db: Session, user: User, data: ScheduleIn) -> Meeting:
+    """The supervisor sets the date. The meeting is scheduled at once and the students are told."""
+    if not is_assigned_supervisor(db, data.thesis_id, user):
+        raise NotFoundError("Thesis not found")
+    when = _check_future(data.meeting_date)
+    _check_free(db, data.thesis_id, when)
+    meeting = Meeting(
+        thesis_id=data.thesis_id, meeting_date=when, agenda=data.agenda.strip(), mode=data.mode,
+        location=data.location.strip(), status="scheduled", requested_by=user.id,
+    )
+    db.add(meeting)
+    db.flush()
+    log_audit(db, user.id, "meeting.schedule", "meeting", meeting.id, {"date": when.isoformat()})
+    return meeting
+
+
+def reschedule(db: Session, meeting_id: int, user: User, data: RescheduleIn) -> Meeting:
+    """Move a scheduled meeting to another time (and place). The students are told."""
+    meeting = _get_as_supervisor(db, meeting_id, user)
+    if meeting.status != "scheduled":
+        raise ConflictError("Only a scheduled meeting can be moved")
+    when = _check_future(data.meeting_date)
+    _check_free(db, meeting.thesis_id, when, ignore_id=meeting.id)
+    meeting.meeting_date = when
+    if data.location is not None:
+        meeting.location = data.location.strip()
+    meeting.updated_at = _now()
+    log_audit(db, user.id, "meeting.reschedule", "meeting", meeting.id, {"date": when.isoformat()})
+    db.flush()
+    return meeting
+
+
 def decline(db: Session, meeting_id: int, user: User, reason: str) -> Meeting:
     meeting = _get_as_supervisor(db, meeting_id, user)
     if meeting.status != "requested":
@@ -167,4 +218,4 @@ def complete(db: Session, meeting_id: int, user: User, data: CompleteIn) -> Meet
     meeting.updated_at = _now()
     log_audit(db, user.id, "meeting.complete", "meeting", meeting.id)
     db.flush()
-    return meeting
+    return meeting

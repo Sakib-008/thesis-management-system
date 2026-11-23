@@ -189,3 +189,8 @@ def read(db: Session, proposal_id: int, user: User, limit: int | None = None) ->
             flags=why["flags"], summary=why["summary"], generated_at=row.generated_at,
         ))
     return out
+
+
+def get_embedder_name() -> str:
+    """The name of the embedding model in use, for reports."""
+    return get_embedder().name
