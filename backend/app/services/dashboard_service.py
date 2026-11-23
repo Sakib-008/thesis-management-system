@@ -241,10 +241,11 @@ def report_stats(db: Session) -> ReportStats:
         key = "Allocation run" if method == AssignmentMethod.merit_allocation else "Manual"
         method_counts[key] += 1
     results = db.execute(
-        select(ThesisResult.thesis_id, ThesisResult.published_at, Thesis.created_at)
+        select(ThesisResult.thesis_id, func.min(ThesisResult.published_at), Thesis.created_at)
         .join(Thesis, Thesis.id == ThesisResult.thesis_id)
         .where(ThesisResult.thesis_id.in_(thesis_ids) if thesis_ids else ThesisResult.thesis_id.in_([]))
-    ).all()
+        .group_by(ThesisResult.thesis_id, Thesis.created_at)
+    ).all()  # a thesis counts as finished from the first published result of its team
     completion_days = [
         (published_at - created_at).days for _, published_at, created_at in results if published_at and created_at
     ]
@@ -261,7 +262,7 @@ def report_stats(db: Session) -> ReportStats:
         or 0
     )
     by_month = db.execute(
-        select(func.to_char(ThesisResult.published_at, "YYYY-MM"), func.count())
+        select(func.to_char(ThesisResult.published_at, "YYYY-MM"), func.count(func.distinct(ThesisResult.thesis_id)))
         .where(ThesisResult.thesis_id.in_(thesis_ids) if thesis_ids else ThesisResult.thesis_id.in_([]))
         .group_by(func.to_char(ThesisResult.published_at, "YYYY-MM"))
         .order_by(func.to_char(ThesisResult.published_at, "YYYY-MM"))

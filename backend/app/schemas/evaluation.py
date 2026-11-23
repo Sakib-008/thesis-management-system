@@ -4,7 +4,11 @@ from pydantic import BaseModel, Field, model_validator
 
 # ------------------------------------------------------------ criteria and grading
 class CriterionIn(BaseModel):
+    """One course outcome. weight is the most marks it can earn (the active ones must add up to 100)."""
+
     id: int | None = None
+    code: str = Field(min_length=1, max_length=20)
+    category: str = Field(min_length=2, max_length=60)
     name: str = Field(min_length=3, max_length=150)
     description: str = Field(default="", max_length=500)
     weight: float = Field(gt=0, le=100)
@@ -17,6 +21,8 @@ class CriteriaIn(BaseModel):
 
 class CriterionOut(BaseModel):
     id: int
+    code: str
+    category: str
     name: str
     description: str
     weight: float
@@ -67,9 +73,19 @@ class EvaluationIn(BaseModel):
 
 class ScoreOut(BaseModel):
     criterion_id: int
+    code: str = ""  # evaluations made before outcomes existed have no code or group
+    category: str = ""
     name: str
-    weight: float
-    score: float | None
+    weight: float  # the most marks this outcome can earn
+    score: float | None  # the marks given
+
+
+class GroupTotal(BaseModel):
+    """The marks earned in one group of outcomes, such as Presentation, out of the group's maximum."""
+
+    category: str
+    marks: float
+    max: float
 
 
 class EvaluationOut(BaseModel):
@@ -80,15 +96,18 @@ class EvaluationOut(BaseModel):
     scores: list[ScoreOut]
     comment: str
     total: float
+    groups: list[GroupTotal] = []
     grade: str
     submitted_at: datetime | None
     updated_at: datetime | None
 
 
 class ResultCriterion(BaseModel):
+    code: str = ""
+    category: str = ""
     name: str
-    weight: float
-    average: float
+    weight: float  # the most marks
+    average: float  # the average marks given by the evaluators
 
 
 class ResultComment(BaseModel):
@@ -102,15 +121,20 @@ class ResultOut(BaseModel):
     grade: str | None = None
     evaluators_count: int = 0
     criteria: list[ResultCriterion] = []
+    groups: list[GroupTotal] = []
     comments: list[ResultComment] = []
     published_at: datetime | None = None
 
 
 class EvaluationRow(BaseModel):
+    """One student of one thesis: marks are given and published for each student separately."""
+
     thesis_id: int
     proposal_id: int
+    student_id: int
+    student_name: str
+    student_number: str | None
     title: str
-    student_names: list[str]
     supervisor_name: str | None
     my_status: str  # none, draft or final
     finals: int
@@ -120,11 +144,24 @@ class EvaluationRow(BaseModel):
     published: bool
 
 
+class TeamMember(BaseModel):
+    """A student of the thesis and how far the signed-in person is with marking them."""
+
+    student_id: int
+    name: str
+    student_number: str | None
+    my_status: str  # none, draft or final
+    published: bool
+
+
 class EvaluationDetail(BaseModel):
     thesis_id: int
     proposal_id: int
     title: str
-    student_names: list[str]
+    student_id: int  # the student these marks are for
+    student_name: str
+    student_number: str | None
+    team: list[TeamMember]
     supervisor_name: str | None
     criteria: list[CriterionOut]  # the active ones
     criteria_valid: bool

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_roles
 from app.db.session import get_db
 from app.models.user import User, UserRole
-from app.schemas.meetings import AcceptIn, CompleteIn, DeclineIn, MeetingIn, MeetingOut
+from app.schemas.meetings import AcceptIn, CompleteIn, DeclineIn, MeetingIn, MeetingOut, RescheduleIn, ScheduleIn
 from app.services import meeting_service as svc
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 student_only = require_roles(UserRole.student)
@@ -17,6 +17,14 @@ def request_meeting(body: MeetingIn, user: User = Depends(student_only), db: Ses
     meeting = svc.request_meeting(db, user, body)
     db.commit()
     return svc.serialize(db, meeting)
+@router.post("/schedule", response_model=MeetingOut)
+def schedule_meeting(body: ScheduleIn, user: User = Depends(supervisor_only), db: Session = Depends(get_db)):
+    """A supervisor sets a meeting date with one of their own students."""
+    meeting = svc.schedule(db, user, body)
+    db.commit()
+    return svc.serialize(db, meeting)
+
+
 @router.get("/{meeting_id}", response_model=MeetingOut)
 def get_meeting(meeting_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return svc.get(db, meeting_id, user)
@@ -32,6 +40,15 @@ def accept_meeting(
     meeting = svc.accept(db, meeting_id, user, body)
     db.commit()
     return svc.serialize(db, meeting)
+@router.post("/{meeting_id}/reschedule", response_model=MeetingOut)
+def reschedule_meeting(
+    meeting_id: int, body: RescheduleIn, user: User = Depends(supervisor_only), db: Session = Depends(get_db)
+):
+    meeting = svc.reschedule(db, meeting_id, user, body)
+    db.commit()
+    return svc.serialize(db, meeting)
+
+
 @router.post("/{meeting_id}/decline", response_model=MeetingOut)
 def decline_meeting(
     meeting_id: int, body: DeclineIn, user: User = Depends(supervisor_only), db: Session = Depends(get_db)
@@ -46,4 +63,4 @@ def complete_meeting(
     """Record what was discussed. This opens the weekly report for the student."""
     meeting = svc.complete(db, meeting_id, user, body)
     db.commit()
-    return svc.serialize(db, meeting)
+    return svc.serialize(db, meeting)

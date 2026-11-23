@@ -6,6 +6,21 @@ class MeetingIn(BaseModel):
     agenda: str = Field(min_length=3, max_length=1000)
     mode: Literal["in_person", "online"] = "in_person"
     location: str = Field(default="", max_length=200)
+class ScheduleIn(BaseModel):
+    """A supervisor sets a meeting date with one of their students. No request from the student is needed."""
+
+    thesis_id: int
+    meeting_date: datetime
+    agenda: str = Field(min_length=3, max_length=1000)
+    mode: Literal["in_person", "online"] = "in_person"
+    location: str = Field(default="", max_length=200)
+
+
+class RescheduleIn(BaseModel):
+    meeting_date: datetime
+    location: str | None = Field(default=None, max_length=200)
+
+
 class AcceptIn(BaseModel):
     meeting_date: datetime | None = None  # change the time the student asked for
     location: str | None = Field(default=None, max_length=200)
@@ -34,4 +49,4 @@ class MeetingOut(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     report_id: int | None
-    report_status: str | None
+    report_status: str | None
